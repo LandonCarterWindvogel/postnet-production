@@ -5,11 +5,11 @@ import { renderProductionBoard, jobCard } from '../components/board/ProductionBo
 import { renderNewJobForm } from '../components/jobs/NewJobForm.js';
 import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';
-import { renderComingSoon } from '../components/layout/ComingSoon.js';
+import { renderSettings } from '../components/settings/StaffSettings.js';
 import { isProduction } from '../utils/helpers.js';
 import { escapeHtml } from '../utils/formatters.js';
 
-export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError }) {
+export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError }) {
   switch (page) {
     case 'new-job':
       return renderNewJobForm(profile);
@@ -38,7 +38,7 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
       return renderStock({ items: stock, profile, error: stockError });
 
     case 'settings':
-      return renderComingSoon('Settings');
+      return renderSettings({ staff, profile, error: staffError });
 
     case 'board':
     default:

@@ -33,6 +33,14 @@ import {
   startStockRealtime,
   stopStockRealtime
 } from '../stores/stockStore.js';
+import {
+  getStaffState,
+  refreshStaff,
+  updateStaff,
+  clearStaff,
+  setStaffError,
+  subscribeStaff
+} from '../stores/staffStore.js';
 
 let appEl;
 
@@ -53,7 +61,9 @@ function render() {
     selectedId: ui.selectedId,
     userId: auth.session.user.id,
     stock: getStockState().items,
-    stockError: getStockState().error
+    stockError: getStockState().error,
+    staff: getStaffState().members,
+    staffError: getStaffState().error
   });
 
   appEl.innerHTML = renderAppShell({
@@ -79,6 +89,7 @@ function bindEvents() {
       await signOut();
       clearJobs();
       clearStock();
+      clearStaff();
       setPage('board');
     }
 
@@ -112,6 +123,7 @@ function bindEvents() {
         await signIn(form.get('email'), form.get('password'));
         await refreshJobs();
         await refreshStock();
+        await refreshStaff();
         startRealtime();
         startStockRealtime();
       } catch (error) {
@@ -146,6 +158,23 @@ function bindEvents() {
         }, getAuthState().session.user.id);
       } catch (error) {
         setStockError(error.message);
+      }
+      return;
+    }
+
+    if (event.target.classList.contains('staff-row__form')) {
+      const staffId = event.target.dataset.staffId;
+      const form = new FormData(event.target);
+      const member = getStaffState().members.find((existing) => existing.id === staffId);
+      if (!member) return;
+      try {
+        await updateStaff(member, {
+          fullName: form.get('fullName'),
+          branch: form.get('branch'),
+          role: form.get('role')
+        });
+      } catch (error) {
+        setStaffError(error.message);
       }
       return;
     }
@@ -196,6 +225,7 @@ export async function initApp() {
   subscribeJobs(render);
   subscribeConnection(render);
   subscribeStock(render);
+  subscribeStaff(render);
 
   bindEvents();
 
@@ -203,6 +233,7 @@ export async function initApp() {
   if (getAuthState().session) {
     await refreshJobs();
     await refreshStock();
+    await refreshStaff();
     startRealtime();
     startStockRealtime();
   }

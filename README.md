@@ -40,6 +40,16 @@ Materials get their own table (`stock_items`) instead of being a "Coming later" 
 
 There's no automatic deduction when a job is created — jobs don't record a per-unit consumption rate, and a guessed one would be worse than an honest manual count. Levels start at 0/0 after the migration; set real quantities and thresholds from the Stock page before relying on the low-stock flag.
 
+## Sprint 6 — Settings / staff management
+
+The exact friction from the Sprint 1 setup — fixing a login's role or branch meant hand-writing SQL in the Supabase editor — is gone. Production users now get a full staff list on the Settings page with editable name, branch, and role per person, backed by two new RLS policies: `Production can read every profile` and `Production can update every profile` (previously everyone, including production, could only see and edit their own row).
+
+Branch users see a read-only card of their own profile instead, with a note to ask production for changes — same "role decides what you see" pattern as My Jobs.
+
+Not built: creating brand-new logins from inside the app. That still means Supabase Authentication → Users → Add user, same as it always has — a real invite flow needs a server-side call with the `service_role` key, and `docs/architecture.md` is explicit that key never belongs in the front end. Fixing an existing person's access is now self-service; onboarding a new one is still a one-time Supabase step.
+
+One known limitation: if a production user changes their *own* role or branch, the sidebar won't reflect it until they sign out and back in — the signed-in session's profile isn't re-fetched automatically after a Settings edit.
+
 ## Run locally
 
 1. Copy `.env.example` to `.env`.

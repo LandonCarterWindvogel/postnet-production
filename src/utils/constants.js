@@ -24,6 +24,12 @@ export const BOARD_STATUSES = Object.keys(STATUS_LABELS).filter((key) => !CLOSED
 
 export const BRANCHES = ['Plettenberg Bay', 'Knysna', 'Waterside', 'Sedgefield'];
 
+export const ROLE_LABELS = {
+  production: 'Production',
+  branch_admin: 'Branch Admin',
+  branch_user: 'Branch User'
+};
+
 export const MATERIALS = {
   stickers: ['Gloss Vinyl', 'Matte Vinyl', 'Clear Vinyl', 'Contravision'],
   flex: ['White Flex', 'Gold Flex', 'Silver Flex']
