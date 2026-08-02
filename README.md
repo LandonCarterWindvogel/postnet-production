@@ -32,6 +32,14 @@ Also added: **Realtime**. The board and My Jobs update live via Supabase Realtim
 
 Run `supabase/migrations/202608020001_realtime_jobs.sql` after the Sprint 1 and 2 migrations — it just adds `public.jobs` to the `supabase_realtime` publication. No RLS changes were needed for the reject workflow; the existing "Production can manage every job" policy already covers it.
 
+## Sprint 5 — Stock
+
+[#sprint-5--stock](#sprint-5--stock)
+
+Materials get their own table (`stock_items`) instead of being a "Coming later" placeholder. Everyone signed in can see current levels; production can update them. Every material already offered on the New Job form (`src/utils/constants.js` `MATERIALS`) is seeded as a row, grouped by Stickers / T-shirt Flex. A row is flagged "Low stock" once its quantity drops to or below its own threshold, and updates live via Realtime.
+
+There's no automatic deduction when a job is created — jobs don't record a per-unit consumption rate, and a guessed one would be worse than an honest manual count. Levels start at 0/0 after the migration; set real quantities and thresholds from the Stock page before relying on the low-stock flag.
+
 ## Run locally
 
 1. Copy `.env.example` to `.env`.

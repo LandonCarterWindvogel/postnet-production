@@ -23,6 +23,16 @@ import {
   getConnectionStatus,
   subscribeConnection
 } from '../stores/jobStore.js';
+import {
+  getStockState,
+  refreshStock,
+  updateStock,
+  clearStock,
+  setStockError,
+  subscribeStock,
+  startStockRealtime,
+  stopStockRealtime
+} from '../stores/stockStore.js';
 
 let appEl;
 
@@ -41,7 +51,9 @@ function render() {
     profile: auth.profile,
     error: jobState.error,
     selectedId: ui.selectedId,
-    userId: auth.session.user.id
+    userId: auth.session.user.id,
+    stock: getStockState().items,
+    stockError: getStockState().error
   });
 
   appEl.innerHTML = renderAppShell({
@@ -63,8 +75,10 @@ function bindEvents() {
 
     if (event.target.closest('[data-signout]')) {
       stopRealtime();
+      stopStockRealtime();
       await signOut();
       clearJobs();
+      clearStock();
       setPage('board');
     }
 
@@ -97,7 +111,9 @@ function bindEvents() {
       try {
         await signIn(form.get('email'), form.get('password'));
         await refreshJobs();
+        await refreshStock();
         startRealtime();
+        startStockRealtime();
       } catch (error) {
         messageEl.textContent = error.message;
       }
@@ -114,6 +130,22 @@ function bindEvents() {
       } catch (error) {
         if (messageEl) messageEl.textContent = error.message;
         else setJobsError(error.message);
+      }
+      return;
+    }
+
+    if (event.target.classList.contains('stock-row__form')) {
+      const stockId = event.target.dataset.stockId;
+      const form = new FormData(event.target);
+      const item = getStockState().items.find((existing) => existing.id === stockId);
+      if (!item) return;
+      try {
+        await updateStock(item, {
+          quantityOnHand: Number(form.get('quantityOnHand')),
+          lowStockThreshold: Number(form.get('lowStockThreshold'))
+        }, getAuthState().session.user.id);
+      } catch (error) {
+        setStockError(error.message);
       }
       return;
     }
@@ -163,13 +195,16 @@ export async function initApp() {
   subscribeAuth(render);
   subscribeJobs(render);
   subscribeConnection(render);
+  subscribeStock(render);
 
   bindEvents();
 
   await loadSession();
   if (getAuthState().session) {
     await refreshJobs();
+    await refreshStock();
     startRealtime();
+    startStockRealtime();
   }
   render();
 }
