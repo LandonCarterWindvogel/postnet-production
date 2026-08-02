@@ -13,6 +13,22 @@ function notify() {
   listeners.forEach((listener) => listener(state));
 }
 
+// --- Job events -----------------------------------------------------------
+// Separate from the state pub-sub above: fires only for specific status
+// transitions worth a notification (see handleRealtimeChange), not every
+// change. app.js turns these into toasts.
+
+const jobEventListeners = new Set();
+
+export function subscribeJobEvents(listener) {
+  jobEventListeners.add(listener);
+  return () => jobEventListeners.delete(listener);
+}
+
+function emitJobEvent(event) {
+  jobEventListeners.forEach((listener) => listener(event));
+}
+
 // --- Realtime connection state -------------------------------------------
 // Tracked separately from `state` so the top bar can show connecting /
 // connected / offline without every job change also touching this.
@@ -61,9 +77,17 @@ export function stopRealtime() {
 function handleRealtimeChange(payload) {
   if (payload.eventType === 'INSERT') {
     const exists = state.jobs.some((job) => job.id === payload.new.id);
-    if (!exists) state.jobs = [payload.new, ...state.jobs];
+    if (!exists) {
+      state.jobs = [payload.new, ...state.jobs];
+      if (payload.new.status === 'incoming') emitJobEvent({ type: 'incoming', job: payload.new });
+    }
   } else if (payload.eventType === 'UPDATE') {
+    const previous = state.jobs.find((job) => job.id === payload.new.id);
     state.jobs = state.jobs.map((job) => (job.id === payload.new.id ? payload.new : job));
+    if (previous && previous.status !== payload.new.status) {
+      if (payload.new.status === 'ready') emitJobEvent({ type: 'ready', job: payload.new });
+      if (payload.new.status === 'rejected') emitJobEvent({ type: 'rejected', job: payload.new });
+    }
   } else if (payload.eventType === 'DELETE') {
     state.jobs = state.jobs.filter((job) => job.id !== payload.old.id);
   }

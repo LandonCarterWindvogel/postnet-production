@@ -1,10 +1,12 @@
-// UI-only state: which page is showing and which job is selected.
-// Session/profile live in authStore.js, jobs live in jobStore.js — this
-// file only tracks navigation, so it stays tiny and framework-free.
+// UI-only state: which page is showing, which job is selected, and any
+// active toast notifications. Session/profile live in authStore.js, jobs
+// live in jobStore.js — this file only tracks navigation + toasts.
 
 const state = {
   page: 'board',
-  selectedId: null
+  selectedId: null,
+  toasts: [],
+  mobileNavOpen: false
 };
 
 const listeners = new Set();
@@ -24,11 +26,32 @@ export function subscribeUi(listener) {
 
 export function setPage(page) {
   state.page = page;
+  state.mobileNavOpen = false;
   notify();
 }
 
 export function selectJob(jobId) {
   state.selectedId = jobId;
   state.page = 'job-details';
+  state.mobileNavOpen = false;
+  notify();
+}
+
+export function toggleMobileNav() {
+  state.mobileNavOpen = !state.mobileNavOpen;
+  notify();
+}
+
+// Auto-dismisses after 6 seconds; can also be dismissed by clicking it
+// (see the [data-dismiss-toast] handler in app.js).
+export function pushToast(message) {
+  const id = crypto.randomUUID();
+  state.toasts = [...state.toasts, { id, message }];
+  notify();
+  setTimeout(() => dismissToast(id), 6000);
+}
+
+export function dismissToast(id) {
+  state.toasts = state.toasts.filter((toast) => toast.id !== id);
   notify();
 }

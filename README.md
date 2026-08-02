@@ -50,6 +50,20 @@ Not built: creating brand-new logins from inside the app. That still means Supab
 
 One known limitation: if a production user changes their *own* role or branch, the sidebar won't reflect it until they sign out and back in — the signed-in session's profile isn't re-fetched automatically after a Settings edit.
 
+## Sprint 7 — Notifications + QA
+
+**Notifications.** A real invite/email system needs a server-side function with the `service_role` key — same reasoning as Sprint 6's staff-management decision, so it stayed out. Realtime was already wired up from Sprint 4, so in-app toast notifications get most of the value with no new infrastructure: branches get a toast when their job goes Ready or gets returned for correction; production gets a toast when a new job comes in. Each side only sees the notifications relevant to it — production doesn't get toasted for its own actions, and a branch doesn't get toasted about a job it just submitted itself.
+
+**QA pass — three real issues found and fixed, not just reviewed:**
+
+1. **Mobile nav was completely broken.** Since Sprint 1, the CSS had a `.menu-button { display:block }` rule at the ≤680px breakpoint, styled for a button that never existed in the HTML — meanwhile the sidebar got `display:none` at that same width. On a phone, the entire navigation vanished with no way to bring it back. Fixed with a real menu button, a slide-out sidebar, and a tap-outside-to-close backdrop.
+2. **Profiles had no server-side guard against self-promotion.** The Sprint 1 "users can update their own profile" policy didn't restrict which columns could change — nothing stopped a branch_user from calling the Supabase API directly and setting their own `role` to `production`. The app's UI never offered this, but RLS is the actual security boundary, not the UI. A trigger now reverts `role`/`branch` changes on self-updates unless the caller is already production.
+3. **Job creation didn't validate its own status.** The insert policy checked who was creating a job and for which branch, but never checked what status it started at — a crafted request could have inserted a job as already `ready` or `collected`. The policy now requires `status = 'incoming'` and `accepted_by is null` on every insert.
+
+Also: escaped the one place a user-derived value (the sign-in initial in the top bar) was interpolated without `escapeHtml`, for defense in depth even though email format makes it low risk in practice. And updated `docs/database.md`, which still described the old "hand-edit branch in SQL" setup flow from before Settings existed.
+
+All four migrations (`202608020001` through `202608020004`) must run in order for a fresh database; on an existing one, only `202608020004_qa_rls_hardening.sql` is new for this sprint.
+
 ## Run locally
 
 1. Copy `.env.example` to `.env`.

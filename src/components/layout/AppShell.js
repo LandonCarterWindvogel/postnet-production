@@ -12,7 +12,7 @@ const CONNECTION_LABELS = {
   disconnected: 'Offline'
 };
 
-export function renderAppShell({ profile, session, currentPage, content, connectionStatus }) {
+export function renderAppShell({ profile, session, currentPage, content, connectionStatus, mobileNavOpen }) {
   const nav = NAV_ITEMS.map(([id, label]) =>
     `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}"><span>${NAV_ICONS[id]}</span>${label}</button>`
   ).join('');
@@ -21,7 +21,7 @@ export function renderAppShell({ profile, session, currentPage, content, connect
   const connectionClass = connectionStatus === 'connected' ? 'connected' : '';
 
   return `<div class="app-shell">
-      <aside class="sidebar">
+      <aside class="sidebar ${mobileNavOpen ? 'sidebar--open' : ''}">
         <a class="brand"><span>PN</span><b>PostNet<br>Production</b></a>
         <nav>${nav}</nav>
         <div class="sidebar-footer">
@@ -29,10 +29,12 @@ export function renderAppShell({ profile, session, currentPage, content, connect
           <strong>${escapeHtml(profile?.branch)}</strong>
         </div>
       </aside>
+      ${mobileNavOpen ? '<div class="sidebar-backdrop" data-toggle-nav></div>' : ''}
       <main>
         <header class="topbar">
+          <button class="menu-button" data-toggle-nav aria-label="Open menu">☰</button>
           <div class="connection ${connectionClass}"><i></i>${connectionLabel}</div>
-          <div class="user-menu"><span>${session.user.email.slice(0, 1).toUpperCase()}</span><button data-signout>Sign out</button></div>
+          <div class="user-menu"><span>${escapeHtml(session.user.email.slice(0, 1).toUpperCase())}</span><button data-signout>Sign out</button></div>
         </header>
         <div class="content">${content}</div>
       </main>

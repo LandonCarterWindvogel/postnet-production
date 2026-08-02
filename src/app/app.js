@@ -4,10 +4,12 @@
 
 import { MATERIALS } from '../utils/constants.js';
 import { validateJobForm } from '../utils/validators.js';
+import { isProduction } from '../utils/helpers.js';
 import { renderAppShell } from '../components/layout/AppShell.js';
 import { renderLoginView } from '../components/auth/LoginView.js';
+import { renderToasts } from '../components/layout/Toasts.js';
 import { renderPage } from './router.js';
-import { getUiState, setPage, selectJob, subscribeUi } from './state.js';
+import { getUiState, setPage, selectJob, subscribeUi, pushToast, dismissToast, toggleMobileNav } from './state.js';
 import { getAuthState, loadSession, signIn, signOut, subscribeAuth } from '../stores/authStore.js';
 import {
   getJobState,
@@ -18,6 +20,7 @@ import {
   clearJobs,
   setJobsError,
   subscribeJobs,
+  subscribeJobEvents,
   startRealtime,
   stopRealtime,
   getConnectionStatus,
@@ -50,7 +53,7 @@ function render() {
   const jobState = getJobState();
 
   if (!auth.session) {
-    appEl.innerHTML = renderLoginView();
+    appEl.innerHTML = renderLoginView() + renderToasts(ui.toasts);
     return;
   }
 
@@ -71,8 +74,9 @@ function render() {
     session: auth.session,
     currentPage: ui.page,
     content,
-    connectionStatus: getConnectionStatus()
-  });
+    connectionStatus: getConnectionStatus(),
+    mobileNavOpen: ui.mobileNavOpen
+  }) + renderToasts(ui.toasts);
 }
 
 function bindEvents() {
@@ -82,6 +86,11 @@ function bindEvents() {
 
     const openJob = event.target.closest('[data-open-job]');
     if (openJob) selectJob(openJob.dataset.openJob);
+
+    const toastEl = event.target.closest('[data-dismiss-toast]');
+    if (toastEl) dismissToast(toastEl.dataset.dismissToast);
+
+    if (event.target.closest('[data-toggle-nav]')) toggleMobileNav();
 
     if (event.target.closest('[data-signout]')) {
       stopRealtime();
@@ -226,6 +235,23 @@ export async function initApp() {
   subscribeConnection(render);
   subscribeStock(render);
   subscribeStaff(render);
+
+  subscribeJobEvents(({ type, job }) => {
+    const profile = getAuthState().profile;
+    if (!profile) return;
+
+    // Ready/Rejected are things a branch needs to act on — production just
+    // did that action themselves, so they don't need a toast about it.
+    // Incoming is the reverse: production needs to know a new job arrived,
+    // the submitting branch already knows since they just submitted it.
+    if (type === 'incoming' && isProduction(profile)) {
+      pushToast(`New job from ${job.branch}: ${job.customer_name}`);
+    } else if (type === 'ready' && !isProduction(profile)) {
+      pushToast(`${job.customer_name}'s job is ready for collection`);
+    } else if (type === 'rejected' && !isProduction(profile)) {
+      pushToast(`${job.customer_name}'s job was returned for correction`);
+    }
+  });
 
   bindEvents();
 
