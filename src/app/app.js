@@ -14,9 +14,14 @@ import {
   refreshJobs,
   createJob,
   advanceJob,
+  rejectJob,
   clearJobs,
   setJobsError,
-  subscribeJobs
+  subscribeJobs,
+  startRealtime,
+  stopRealtime,
+  getConnectionStatus,
+  subscribeConnection
 } from '../stores/jobStore.js';
 
 let appEl;
@@ -35,14 +40,16 @@ function render() {
     jobs: jobState.jobs,
     profile: auth.profile,
     error: jobState.error,
-    selectedId: ui.selectedId
+    selectedId: ui.selectedId,
+    userId: auth.session.user.id
   });
 
   appEl.innerHTML = renderAppShell({
     profile: auth.profile,
     session: auth.session,
     currentPage: ui.page,
-    content
+    content,
+    connectionStatus: getConnectionStatus()
   });
 }
 
@@ -55,6 +62,7 @@ function bindEvents() {
     if (openJob) selectJob(openJob.dataset.openJob);
 
     if (event.target.closest('[data-signout]')) {
+      stopRealtime();
       await signOut();
       clearJobs();
       setPage('board');
@@ -89,8 +97,23 @@ function bindEvents() {
       try {
         await signIn(form.get('email'), form.get('password'));
         await refreshJobs();
+        startRealtime();
       } catch (error) {
         messageEl.textContent = error.message;
+      }
+      return;
+    }
+
+    if (event.target.id === 'reject-form') {
+      const jobId = event.target.dataset.jobId;
+      const form = new FormData(event.target);
+      const messageEl = event.target.querySelector('.form-error');
+      const job = getJobState().jobs.find((item) => item.id === jobId);
+      try {
+        await rejectJob(job, form.get('reason'));
+      } catch (error) {
+        if (messageEl) messageEl.textContent = error.message;
+        else setJobsError(error.message);
       }
       return;
     }
@@ -139,10 +162,14 @@ export async function initApp() {
   subscribeUi(render);
   subscribeAuth(render);
   subscribeJobs(render);
+  subscribeConnection(render);
 
   bindEvents();
 
   await loadSession();
-  if (getAuthState().session) await refreshJobs();
+  if (getAuthState().session) {
+    await refreshJobs();
+    startRealtime();
+  }
   render();
 }

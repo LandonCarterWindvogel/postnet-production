@@ -2,16 +2,22 @@
 // Kept framework-free and pure so it is easy to unit test later.
 
 import { WORKFLOWS } from '../config.js';
-import { STATUS_LABELS } from './constants.js';
+import { STATUS_LABELS, CLOSED_STATUSES } from './constants.js';
 
 export function isProduction(profile) {
   return profile?.role === 'production';
 }
 
+export function isClosed(job) {
+  return CLOSED_STATUSES.includes(job.status);
+}
+
 // Given a job, work out which status it should move to next according to
 // its type's workflow (WORKFLOWS.stickers / WORKFLOWS.flex in config.js).
-// Returns null when the job is already Collected (nothing further to do).
+// Returns null once a job is closed (Collected or Rejected) — nothing
+// further to do until the branch resubmits.
 export function computeNextStatus(job) {
+  if (isClosed(job)) return null;
   if (job.status === 'incoming') return 'queued';
 
   const steps = WORKFLOWS[job.job_type];

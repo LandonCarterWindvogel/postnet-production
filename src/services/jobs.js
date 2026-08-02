@@ -25,3 +25,15 @@ export async function setJobStatus(id, status, acceptedBy = null) {
   if (error) throw error;
   return data;
 }
+
+// Sends a job back to the branch with a note explaining what to fix.
+export async function rejectJob(id, reason) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({ status: 'rejected', notes: reason })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}

@@ -6,10 +6,19 @@ import { NAV_ICONS } from '../../utils/constants.js';
 import { escapeHtml } from '../../utils/formatters.js';
 import { isProduction } from '../../utils/helpers.js';
 
-export function renderAppShell({ profile, session, currentPage, content }) {
+const CONNECTION_LABELS = {
+  connected: 'Live database',
+  connecting: 'Connecting…',
+  disconnected: 'Offline'
+};
+
+export function renderAppShell({ profile, session, currentPage, content, connectionStatus }) {
   const nav = NAV_ITEMS.map(([id, label]) =>
     `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}"><span>${NAV_ICONS[id]}</span>${label}</button>`
   ).join('');
+
+  const connectionLabel = CONNECTION_LABELS[connectionStatus] || CONNECTION_LABELS.disconnected;
+  const connectionClass = connectionStatus === 'connected' ? 'connected' : '';
 
   return `<div class="app-shell">
       <aside class="sidebar">
@@ -22,7 +31,7 @@ export function renderAppShell({ profile, session, currentPage, content }) {
       </aside>
       <main>
         <header class="topbar">
-          <div class="connection connected"><i></i>Live database</div>
+          <div class="connection ${connectionClass}"><i></i>${connectionLabel}</div>
           <div class="user-menu"><span>${session.user.email.slice(0, 1).toUpperCase()}</span><button data-signout>Sign out</button></div>
         </header>
         <div class="content">${content}</div>

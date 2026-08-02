@@ -10,12 +10,17 @@ export const STATUS_LABELS = {
   heat_press: 'Heat Press',
   quality_check: 'Quality Check',
   ready: 'Ready',
-  collected: 'Collected'
+  collected: 'Collected',
+  rejected: 'Rejected'
 };
 
-// The Production Board shows every status except "Collected" (that column
-// is intentionally hidden once a job is picked up).
-export const BOARD_STATUSES = Object.keys(STATUS_LABELS).filter((key) => key !== 'collected');
+// Statuses that are "closed" — a job here has left the active workflow,
+// either because it's done (Collected) or because it was sent back to the
+// branch for correction (Rejected).
+export const CLOSED_STATUSES = ['collected', 'rejected'];
+
+// The Production Board only shows the active in-progress columns.
+export const BOARD_STATUSES = Object.keys(STATUS_LABELS).filter((key) => !CLOSED_STATUSES.includes(key));
 
 export const BRANCHES = ['Plettenberg Bay', 'Knysna', 'Waterside', 'Sedgefield'];
 

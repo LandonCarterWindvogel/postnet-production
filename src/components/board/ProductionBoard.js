@@ -3,11 +3,15 @@
 
 import { BOARD_STATUSES, STATUS_LABELS } from '../../utils/constants.js';
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
-import { computeNextStatus, isProduction } from '../../utils/helpers.js';
+import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
 
 export function jobCard(job) {
   const nextStatus = computeNextStatus(job);
-  return `<article class="job-card ${job.priority}">
+  const nextLabel = job.status === 'rejected'
+    ? 'Returned for correction'
+    : (nextStatus ? STATUS_LABELS[nextStatus] : 'Complete');
+
+  return `<article class="job-card ${job.priority} ${job.status === 'rejected' ? 'status-rejected' : ''}">
     <div class="job-card__top"><span class="job-id">${formatJobNumber(job)}</span><span class="priority">${job.priority}</span></div>
     <h3>${escapeHtml(job.customer_name)}</h3>
     <p class="branch">${escapeHtml(job.branch)} · ${job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers'}</p>
@@ -15,13 +19,13 @@ export function jobCard(job) {
       <div><dt>Material</dt><dd>${escapeHtml(job.material)}</dd></div>
       <div><dt>Specification</dt><dd>${escapeHtml(job.specification)} · ${job.quantity}</dd></div>
     </dl>
-    <div class="job-card__next"><span>Next</span><strong>${nextStatus ? STATUS_LABELS[nextStatus] : 'Complete'}</strong></div>
+    <div class="job-card__next"><span>Next</span><strong>${nextLabel}</strong></div>
     <button class="button" data-open-job="${job.id}">View job</button>
   </article>`;
 }
 
 export function renderProductionBoard({ jobs, profile, error }) {
-  const active = jobs.filter((job) => job.status !== 'collected');
+  const active = jobs.filter((job) => !isClosed(job));
 
   const columns = BOARD_STATUSES.map((status) => {
     const columnJobs = active.filter((job) => job.status === status);

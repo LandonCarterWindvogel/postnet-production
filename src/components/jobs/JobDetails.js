@@ -3,11 +3,12 @@
 
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { STATUS_LABELS } from '../../utils/constants.js';
-import { computeNextStatus, isProduction } from '../../utils/helpers.js';
+import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
 
 export function renderJobDetails(job, profile) {
   const nextStatus = computeNextStatus(job);
   const actionLabel = job.status === 'incoming' ? 'Accept into queue' : `Move to ${STATUS_LABELS[nextStatus]}`;
+  const canReject = isProduction(profile) && !isClosed(job);
 
   return `<section class="page-heading">
       <div>
@@ -31,5 +32,14 @@ export function renderJobDetails(job, profile) {
         <label class="check"><input checked disabled type="checkbox"> Print-ready artwork confirmed</label>
         <label class="check"><input ${job.cutlines_included ? 'checked' : ''} disabled type="checkbox"> Cutlines included</label>
       </fieldset>
-    </section>`;
+      ${job.notes ? `<fieldset><legend>${job.status === 'rejected' ? 'Reason returned for correction' : 'Notes'}</legend><p class="notice">${escapeHtml(job.notes)}</p></fieldset>` : ''}
+    </section>
+    ${canReject ? `<form class="job-form" id="reject-form" data-job-id="${job.id}">
+      <fieldset>
+        <legend>Return for correction</legend>
+        <label>Reason for the branch<textarea name="reason" required placeholder="e.g. artwork is missing bleed, please resend"></textarea></label>
+      </fieldset>
+      <p class="form-error"></p>
+      <div class="form-actions"><button class="button button--ghost">Send back to branch</button></div>
+    </form>` : ''}`;
 }
