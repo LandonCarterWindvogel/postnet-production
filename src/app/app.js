@@ -44,6 +44,15 @@ import {
   setStaffError,
   subscribeStaff
 } from '../stores/staffStore.js';
+import {
+  getMachineState,
+  refreshMachines,
+  cycleMachineStatus,
+  clearMachines,
+  subscribeMachines,
+  startMachineRealtime,
+  stopMachineRealtime
+} from '../stores/machineStore.js';
 
 let appEl;
 
@@ -66,7 +75,8 @@ function render() {
     stock: getStockState().items,
     stockError: getStockState().error,
     staff: getStaffState().members,
-    staffError: getStaffState().error
+    staffError: getStaffState().error,
+    machines: getMachineState().machines
   });
 
   appEl.innerHTML = renderAppShell({
@@ -92,13 +102,21 @@ function bindEvents() {
 
     if (event.target.closest('[data-toggle-nav]')) toggleMobileNav();
 
+    const machineEl = event.target.closest('[data-cycle-machine]');
+    if (machineEl) {
+      const machine = getMachineState().machines.find((existing) => existing.id === machineEl.dataset.cycleMachine);
+      if (machine) cycleMachineStatus(machine, getAuthState().session.user.id).catch((error) => setJobsError(error.message));
+    }
+
     if (event.target.closest('[data-signout]')) {
       stopRealtime();
       stopStockRealtime();
+      stopMachineRealtime();
       await signOut();
       clearJobs();
       clearStock();
       clearStaff();
+      clearMachines();
       setPage('board');
     }
 
@@ -133,8 +151,10 @@ function bindEvents() {
         await refreshJobs();
         await refreshStock();
         await refreshStaff();
+        await refreshMachines();
         startRealtime();
         startStockRealtime();
+        startMachineRealtime();
       } catch (error) {
         messageEl.textContent = error.message;
       }
@@ -235,6 +255,7 @@ export async function initApp() {
   subscribeConnection(render);
   subscribeStock(render);
   subscribeStaff(render);
+  subscribeMachines(render);
 
   subscribeJobEvents(({ type, job }) => {
     const profile = getAuthState().profile;
@@ -260,8 +281,10 @@ export async function initApp() {
     await refreshJobs();
     await refreshStock();
     await refreshStaff();
+    await refreshMachines();
     startRealtime();
     startStockRealtime();
+    startMachineRealtime();
   }
   render();
 }

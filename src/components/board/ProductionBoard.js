@@ -1,7 +1,7 @@
 // Renders the main Production Board: one column per workflow status, with
 // jobCard() exported separately since the My Jobs page reuses it.
 
-import { BOARD_STATUSES, STATUS_LABELS } from '../../utils/constants.js';
+import { BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS } from '../../utils/constants.js';
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
 
@@ -24,8 +24,18 @@ export function jobCard(job) {
   </article>`;
 }
 
-export function renderProductionBoard({ jobs, profile, error }) {
+function machineCard(machine, canEdit) {
+  if (!machine) return `<article class="machine"><span>Machines</span><strong>—</strong><small>No machines set up</small></article>`;
+  return `<article class="machine status-${machine.status} ${canEdit ? 'machine--editable' : ''}" ${canEdit ? `data-cycle-machine="${machine.id}"` : ''}>
+    <span>${escapeHtml(machine.name)}</span>
+    <strong><i></i> ${MACHINE_STATUS_LABELS[machine.status] || machine.status}</strong>
+    <small>${canEdit ? 'Tap to update' : 'Machine status'}</small>
+  </article>`;
+}
+
+export function renderProductionBoard({ jobs, profile, error, machines = [] }) {
   const active = jobs.filter((job) => !isClosed(job));
+  const canEditMachines = isProduction(profile);
 
   const columns = BOARD_STATUSES.map((status) => {
     const columnJobs = active.filter((job) => job.status === status);
@@ -48,7 +58,7 @@ export function renderProductionBoard({ jobs, profile, error }) {
       <article><span>Active jobs</span><strong>${active.length}</strong><small>Across all production stages</small></article>
       <article><span>Urgent</span><strong>${active.filter((job) => job.priority === 'urgent').length}</strong><small>Needs attention first</small></article>
       <article><span>Ready today</span><strong>${active.filter((job) => job.status === 'ready').length}</strong><small>Awaiting collection</small></article>
-      <article class="machine"><span>Roland BN-20</span><strong><i></i> Ready</strong><small>Manual status for Sprint 2</small></article>
+      ${machines.map((machine) => machineCard(machine, canEditMachines)).join('') || machineCard(null, canEditMachines)}
     </section>
     <section class="board">${columns}</section>`;
 }

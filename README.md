@@ -34,11 +34,11 @@ Run `supabase/migrations/202608020001_realtime_jobs.sql` after the Sprint 1 and 
 
 ## Sprint 5 — Stock
 
-[#sprint-5--stock](#sprint-5--stock)
-
 Materials get their own table (`stock_items`) instead of being a "Coming later" placeholder. Everyone signed in can see current levels; production can update them. Every material already offered on the New Job form (`src/utils/constants.js` `MATERIALS`) is seeded as a row, grouped by Stickers / T-shirt Flex. A row is flagged "Low stock" once its quantity drops to or below its own threshold, and updates live via Realtime.
 
 There's no automatic deduction when a job is created — jobs don't record a per-unit consumption rate, and a guessed one would be worse than an honest manual count. Levels start at 0/0 after the migration; set real quantities and thresholds from the Stock page before relying on the low-stock flag.
+
+**Correction:** sticker materials (vinyl) are tracked by weight, not length — `202608020006_stock_unit_kg.sql` fixes the unit label from `m` to `kg` for the stickers category. It only changes the label, not the stored numbers, so any quantities already entered in meters need re-entering in kg from the Stock page. Flex materials keep their `sheets` unit.
 
 ## Sprint 6 — Settings / staff management
 
@@ -63,6 +63,14 @@ One known limitation: if a production user changes their *own* role or branch, t
 Also: escaped the one place a user-derived value (the sign-in initial in the top bar) was interpolated without `escapeHtml`, for defense in depth even though email format makes it low risk in practice. And updated `docs/database.md`, which still described the old "hand-edit branch in SQL" setup flow from before Settings existed.
 
 All four migrations (`202608020001` through `202608020004`) must run in order for a fresh database; on an existing one, only `202608020004_qa_rls_hardening.sql` is new for this sprint.
+
+**Hotfix, same sprint:** the two staff-management policies from Sprint 6 broke every login with `infinite recursion detected in policy for relation "profiles"` — a policy on `profiles` was querying `profiles` again from inside its own condition, which is unsafe RLS regardless of how correct the logic looks. Fixed in `202608020005_fix_profiles_recursion.sql` using a `SECURITY DEFINER` helper function (`public.is_production()`), the standard Postgres pattern for this. Run this migration too, after `202608020004`.
+
+**Three more issues found during real device testing:**
+
+1. **Realtime showed "Offline" on the live Netlify site but worked locally.** `netlify.toml`'s CSP `connect-src` allowed `https://*.supabase.co` but not `wss://*.supabase.co` — Realtime connects over a WebSocket, a separate scheme CSP doesn't infer from an `https://` entry. Local `vite dev` never sends a CSP header at all, so it worked there and nowhere else. Fixed in `netlify.toml`; takes effect on the next Netlify deploy, no migration needed.
+2. **T-shirt flex jobs could never move past Queued.** `WORKFLOWS.flex` in `src/config.js` has always stepped through a `'Cutting'` stage, but the `job_state` enum only ever had `contour_cutting` (the sticker-specific step) — there was no plain `cutting` value at all. This has been broken since the original schema, not something a later sprint introduced. Fixed with a new enum value in `202608020007_add_cutting_status.sql` plus a matching `STATUS_LABELS` entry — flex jobs now get their own "Cutting" board column, separate from stickers' "Contour Cutting".
+3. **The Roland BN-20 status was never real.** It was a hardcoded `<article>` since Sprint 1/2, literally labeled "Manual status for Sprint 2" in the code — always showing "Ready" regardless of anything. Rather than just explain that away, it's now backed by a real `machines` table (`202608020008_machine_status.sql`): everyone sees the current status, production can tap it to cycle Ready → Printing → Cutting → Maintenance, and it syncs live via Realtime like Stock and Jobs.
 
 ## Run locally
 

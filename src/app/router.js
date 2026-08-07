@@ -9,14 +9,14 @@ import { renderSettings } from '../components/settings/StaffSettings.js';
 import { isProduction } from '../utils/helpers.js';
 import { escapeHtml } from '../utils/formatters.js';
 
-export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError }) {
+export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError, machines }) {
   switch (page) {
     case 'new-job':
       return renderNewJobForm(profile);
 
     case 'job-details': {
       const job = jobs.find((item) => item.id === selectedId);
-      return job ? renderJobDetails(job, profile) : renderProductionBoard({ jobs, profile, error });
+      return job ? renderJobDetails(job, profile) : renderProductionBoard({ jobs, profile, error, machines });
     }
 
     case 'my-jobs': {
@@ -42,6 +42,6 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
 
     case 'board':
     default:
-      return renderProductionBoard({ jobs, profile, error });
+      return renderProductionBoard({ jobs, profile, error, machines });
   }
 }

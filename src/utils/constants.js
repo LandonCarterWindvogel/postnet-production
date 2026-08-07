@@ -3,6 +3,7 @@
 export const STATUS_LABELS = {
   incoming: 'Incoming',
   queued: 'Queued',
+  cutting: 'Cutting',
   printing: 'Printing',
   drying: 'Drying',
   contour_cutting: 'Contour Cutting',
@@ -28,6 +29,13 @@ export const ROLE_LABELS = {
   production: 'Production',
   branch_admin: 'Branch Admin',
   branch_user: 'Branch User'
+};
+
+export const MACHINE_STATUS_LABELS = {
+  ready: 'Ready',
+  printing: 'Printing',
+  cutting: 'Cutting',
+  maintenance: 'Maintenance'
 };
 
 export const MATERIALS = {
