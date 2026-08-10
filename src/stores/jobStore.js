@@ -1,8 +1,7 @@
 // Holds the current list of jobs and notifies subscribers on change.
-// Wraps services/jobs.js (the Supabase calls) so components never talk to
-// Supabase directly.
+// Wraps services/jobs.js (the Supabase calls) so components never talk to Supabase directly.
 
-import { createJob as apiCreateJob, listJobs, setJobStatus, rejectJob as apiRejectJob } from '../services/jobs.js';
+import { createJob as apiCreateJob, listJobs, setJobStatus, rejectJob as apiRejectJob, resubmitJob as apiResubmitJob, getJobEvents } from '../services/jobs.js';
 import { computeNextStatus } from '../utils/helpers.js';
 import { supabase } from '../services/supabase.js';
 
@@ -14,10 +13,6 @@ function notify() {
 }
 
 // --- Job events -----------------------------------------------------------
-// Separate from the state pub-sub above: fires only for specific status
-// transitions worth a notification (see handleRealtimeChange), not every
-// change. app.js turns these into toasts.
-
 const jobEventListeners = new Set();
 
 export function subscribeJobEvents(listener) {
@@ -30,11 +25,8 @@ function emitJobEvent(event) {
 }
 
 // --- Realtime connection state -------------------------------------------
-// Tracked separately from `state` so the top bar can show connecting /
-// connected / offline without every job change also touching this.
-
 let channel = null;
-let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
+let connectionStatus = 'disconnected';
 const connectionListeners = new Set();
 
 function setConnectionStatus(status) {
@@ -51,9 +43,6 @@ export function subscribeConnection(listener) {
   return () => connectionListeners.delete(listener);
 }
 
-// Subscribes to live Postgres changes on the jobs table. RLS still applies
-// to what each client receives, so a branch user only ever sees changes to
-// their own branch's jobs, same as a normal select.
 export function startRealtime() {
   if (!supabase || channel) return;
   setConnectionStatus('connecting');
@@ -80,6 +69,9 @@ function handleRealtimeChange(payload) {
     if (!exists) {
       state.jobs = [payload.new, ...state.jobs];
       if (payload.new.status === 'incoming') emitJobEvent({ type: 'incoming', job: payload.new });
+      if (payload.new.priority === 'rush' || payload.new.priority === 'urgent') {
+        emitJobEvent({ type: 'rush_submitted', job: payload.new });
+      }
     }
   } else if (payload.eventType === 'UPDATE') {
     const previous = state.jobs.find((job) => job.id === payload.new.id);
@@ -87,6 +79,9 @@ function handleRealtimeChange(payload) {
     if (previous && previous.status !== payload.new.status) {
       if (payload.new.status === 'ready') emitJobEvent({ type: 'ready', job: payload.new });
       if (payload.new.status === 'rejected') emitJobEvent({ type: 'rejected', job: payload.new });
+      if (previous.status === 'rejected' && payload.new.status === 'incoming') {
+        emitJobEvent({ type: 'resubmitted', job: payload.new });
+      }
     }
   } else if (payload.eventType === 'DELETE') {
     state.jobs = state.jobs.filter((job) => job.id !== payload.old.id);
@@ -117,11 +112,10 @@ export async function createJob(payload) {
   const job = await apiCreateJob(payload);
   state.jobs = [job, ...state.jobs];
   notify();
+  emitJobEvent({ type: 'created', job });
   return job;
 }
 
-// Moves a job to its next workflow status. Production users accepting an
-// Incoming job also get recorded as accepted_by.
 export async function advanceJob(job, userId) {
   const nextStatus = computeNextStatus(job);
   if (!nextStatus) return job;
@@ -133,14 +127,29 @@ export async function advanceJob(job, userId) {
   return saved;
 }
 
-// Sends a job back to the branch with a reason. Realtime will also deliver
-// this update to other connected clients, but we update locally right away
-// so the person who clicked the button doesn't wait on a round trip.
 export async function rejectJob(job, reason) {
   const saved = await apiRejectJob(job.id, reason);
   state.jobs = state.jobs.map((item) => (item.id === saved.id ? saved : item));
   notify();
+  emitJobEvent({ type: 'rejected', job: saved });
   return saved;
+}
+
+export async function resubmitJob(job) {
+  const saved = await apiResubmitJob(job.id);
+  state.jobs = state.jobs.map((item) => (item.id === saved.id ? saved : item));
+  notify();
+  emitJobEvent({ type: 'resubmitted', job: saved });
+  return saved;
+}
+
+export async function fetchJobEvents(jobId) {
+  const events = await getJobEvents(jobId);
+  const job = state.jobs.find(j => j.id === jobId);
+  if (job) {
+    job.events = events;
+  }
+  return events;
 }
 
 export function setJobsError(message) {
@@ -148,7 +157,6 @@ export function setJobsError(message) {
   notify();
 }
 
-// Called on sign-out so the next login never briefly shows a stale board.
 export function clearJobs() {
   state.jobs = [];
   state.error = '';

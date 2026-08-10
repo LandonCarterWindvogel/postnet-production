@@ -30,3 +30,8 @@ export function computeNextStatus(job) {
 
   return job.status === 'ready' ? 'collected' : null;
 }
+
+export function isOverdue(job) {
+  if (!job.expected_ready_by) return false;
+  return new Date() > new Date(job.expected_ready_by) && !isClosed(job);
+}

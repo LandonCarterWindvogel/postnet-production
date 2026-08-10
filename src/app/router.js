@@ -1,22 +1,23 @@
 // Maps the current page id to the HTML for that page. This is the only
 // file that needs to change when a new nav destination is added.
 
-import { renderProductionBoard, jobCard } from '../components/board/ProductionBoard.js';
+import { renderProductionBoard } from '../components/board/ProductionBoard.js';
 import { renderNewJobForm } from '../components/jobs/NewJobForm.js';
 import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';
 import { renderSettings } from '../components/settings/StaffSettings.js';
+import { renderBranchDashboard } from '../components/dashboard/BranchDashboard.js';
 import { isProduction } from '../utils/helpers.js';
 import { escapeHtml } from '../utils/formatters.js';
 
-export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError, machines }) {
+export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError, machines, searchQuery, filters }) {
   switch (page) {
     case 'new-job':
-      return renderNewJobForm(profile);
+      return renderNewJobForm(profile, stock);
 
     case 'job-details': {
       const job = jobs.find((item) => item.id === selectedId);
-      return job ? renderJobDetails(job, profile) : renderProductionBoard({ jobs, profile, error, machines });
+      return job ? renderJobDetails(job, profile, userId) : renderProductionBoard({ jobs, profile, error, machines, searchQuery, filters });
     }
 
     case 'my-jobs': {
@@ -34,6 +35,9 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
         <section class="job-table">${myJobs.map(jobCard).join('') || '<p>No jobs yet.</p>'}</section>`;
     }
 
+    case 'dashboard':
+      return renderBranchDashboard({ jobs, profile });
+
     case 'stock':
       return renderStock({ items: stock, profile, error: stockError });
 
@@ -42,6 +46,6 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
 
     case 'board':
     default:
-      return renderProductionBoard({ jobs, profile, error, machines });
+      return renderProductionBoard({ jobs, profile, error, machines, searchQuery, filters });
   }
 }

@@ -1,83 +1,84 @@
 # PostNet Production
 
-PostNet Production is a progressive web app for managing sticker and T-shirt flex work from intake through to collection. It deliberately records email artwork references instead of storing artwork files.
+PostNet Production is a progressive web app for managing sticker and T‑shirt flex work from intake through to collection. It deliberately records email artwork references instead of storing artwork files.
 
-## Sprint 1 — Foundation
+## Sprints
 
-This release provides the Vite PWA shell, responsive Production Board, login flow, a secure Supabase schema, and the job-intake interface. Job persistence, live queue updates, stock, and notifications are delivered in later sprints.
+### Sprint 1 — Foundation
 
-## Sprint 2 — Real jobs
+Vite PWA shell, responsive Production Board, login flow, secure Supabase schema, and job‑intake interface. Job persistence, live queue updates, stock, and notifications delivered in later sprints.
 
-Jobs are created and persisted in Supabase. Branches submit into Incoming, Production accepts into Queued, and each job moves through its type-specific workflow (stickers or T-shirt flex) to Ready and Collected.
+### Sprint 2 — Real jobs
 
-## Sprint 3 — Architecture
+Jobs are created and persisted in Supabase. Branches submit into Incoming, Production accepts into Queued, and each job moves through its type‑specific workflow (stickers or T‑shirt flex) to Ready and Collected.
 
-`src/main.js` used to hold the entire app in one file. It's now a two-line entry point that calls `initApp()`. The app is split into:
+### Sprint 3 — Architecture
 
-- `src/app/` — `app.js` (wiring + event handling), `router.js` (page → view), `state.js` (current page/selection)
-- `src/stores/` — `authStore.js` (session/profile) and `jobStore.js` (jobs), each a tiny pub-sub so the UI re-renders on change
-- `src/components/` — one render function per view (`board/`, `jobs/`, `layout/`, `auth/`)
-- `src/utils/` — `constants.js`, `formatters.js`, `dates.js`, `helpers.js`, `validators.js`
+`src/main.js` became a two‑line entry point; the app is split into `app/`, `stores/`, `components/`, and `utils/`. No behavior changed.
 
-No behavior changed in this sprint — every screen, button, and workflow step works exactly as it did at the end of Sprint 2. This just makes the next sprint (Stock, Settings, and Sprint 4's Realtime) easier to build without one file growing indefinitely. The unused Sprint 1 sample-data file (`src/data/sample-jobs.js`) was also removed since real Supabase jobs replaced it in Sprint 2.
+### Sprint 4 — Workflow fixes + Realtime
 
-## Sprint 4 — Workflow fixes + Realtime
+- **Return for correction** added: Production can send any active job back to the branch with a reason.
+- **My Jobs** now filters correctly: branch users see their branch’s history; production sees jobs they personally accepted.
+- **Realtime** updates the board and My Jobs live via Supabase Realtime.
 
-Two gaps from earlier sprints are closed:
+### Sprint 5 — Stock
 
-- **Return for correction.** `docs/workflow.md` always described this, but there was no button for it. Production can now send any active job back to the branch with a reason (stored in the job's `notes` field). Rejected jobs leave the board, same as Collected ones, and show up in the branch's My Jobs history with the reason attached.
-- **My Jobs actually filters now.** It used to show every job, identical to the board. Branch users now see their branch's full history (including Ready/Collected/Rejected, which the board hides); Production sees the jobs they personally accepted.
+Materials table (`stock_items`) seeded with all options from the New Job form. Everyone can view; production can update. Low‑stock flag when quantity ≤ threshold. Realtime updates.
 
-Also added: **Realtime**. The board and My Jobs update live via Supabase Realtime — if a branch submits a job, Production sees it appear without refreshing, and vice versa for status changes. The top bar's connection indicator now reflects the real Realtime connection state instead of a hardcoded "connected".
+**Correction:** sticker materials are tracked by **weight (kg)**, not length. Flex materials remain in `sheets`.
 
-Run `supabase/migrations/202608020001_realtime_jobs.sql` after the Sprint 1 and 2 migrations — it just adds `public.jobs` to the `supabase_realtime` publication. No RLS changes were needed for the reject workflow; the existing "Production can manage every job" policy already covers it.
+### Sprint 6 — Settings / staff management
 
-## Sprint 5 — Stock
+Production users can edit any profile’s name, branch, and role directly from the Settings page. Branch users see a read‑only card of their own profile. No invite flow – new logins still created in Supabase Auth → Users.
 
-Materials get their own table (`stock_items`) instead of being a "Coming later" placeholder. Everyone signed in can see current levels; production can update them. Every material already offered on the New Job form (`src/utils/constants.js` `MATERIALS`) is seeded as a row, grouped by Stickers / T-shirt Flex. A row is flagged "Low stock" once its quantity drops to or below its own threshold, and updates live via Realtime.
+### Sprint 7 — Notifications + QA
 
-There's no automatic deduction when a job is created — jobs don't record a per-unit consumption rate, and a guessed one would be worse than an honest manual count. Levels start at 0/0 after the migration; set real quantities and thresholds from the Stock page before relying on the low-stock flag.
+In‑app toasts for relevant events (new job for production; ready/returned for branch). Fixed mobile nav, self‑promotion RLS loophole, job creation status validation, escaped user‑derived values, and updated documentation.
 
-**Correction:** sticker materials (vinyl) are tracked by weight, not length — `202608020006_stock_unit_kg.sql` fixes the unit label from `m` to `kg` for the stickers category. It only changes the label, not the stored numbers, so any quantities already entered in meters need re-entering in kg from the Stock page. Flex materials keep their `sheets` unit.
+### Sprint 8 — Workflow enforcement & job events (current)
 
-## Sprint 6 — Settings / staff management
+- **Database‑enforced workflow transitions** – status can only move forward according to the correct workflow for the job type.
+- **Material compatibility** – sticker jobs can only use sticker materials; flex jobs only flex materials.
+- **Branch resubmission** – branch users can resubmit a rejected job after correction (back to Incoming).
+- **Job events & timeline** – every status change, creation, return, resubmission, and rush confirmation is recorded in `job_events` and displayed as a timeline on the job detail page.
+- **24–48 hour standard** – normal jobs get an `expected_ready_by` of 48 hours from creation. Rush/urgent jobs require production confirmation before an expected date is set.
+- **Rush/urgent confirmation** – production must explicitly confirm rush/urgent jobs; the UI shows a confirmation button.
+- **Search and filters** on the Production Board (by job number, customer, branch, email, material; and filters for branch, priority, status, type, material).
+- **Branch Dashboard** – branch users see counts and recent jobs.
+- **Stock warnings** on the New Job form – warns if material is low or unavailable.
+- **Production summary** – counts of overdue, urgent, returned, and ready jobs on the board.
 
-The exact friction from the Sprint 1 setup — fixing a login's role or branch meant hand-writing SQL in the Supabase editor — is gone. Production users now get a full staff list on the Settings page with editable name, branch, and role per person, backed by two new RLS policies: `Production can read every profile` and `Production can update every profile` (previously everyone, including production, could only see and edit their own row).
+### Sprint 9 — Architecture cleanup (optional future)
 
-Branch users see a read-only card of their own profile instead, with a note to ask production for changes — same "role decides what you see" pattern as My Jobs.
-
-Not built: creating brand-new logins from inside the app. That still means Supabase Authentication → Users → Add user, same as it always has — a real invite flow needs a server-side call with the `service_role` key, and `docs/architecture.md` is explicit that key never belongs in the front end. Fixing an existing person's access is now self-service; onboarding a new one is still a one-time Supabase step.
-
-One known limitation: if a production user changes their *own* role or branch, the sidebar won't reflect it until they sign out and back in — the signed-in session's profile isn't re-fetched automatically after a Settings edit.
-
-## Sprint 7 — Notifications + QA
-
-**Notifications.** A real invite/email system needs a server-side function with the `service_role` key — same reasoning as Sprint 6's staff-management decision, so it stayed out. Realtime was already wired up from Sprint 4, so in-app toast notifications get most of the value with no new infrastructure: branches get a toast when their job goes Ready or gets returned for correction; production gets a toast when a new job comes in. Each side only sees the notifications relevant to it — production doesn't get toasted for its own actions, and a branch doesn't get toasted about a job it just submitted itself.
-
-**QA pass — three real issues found and fixed, not just reviewed:**
-
-1. **Mobile nav was completely broken.** Since Sprint 1, the CSS had a `.menu-button { display:block }` rule at the ≤680px breakpoint, styled for a button that never existed in the HTML — meanwhile the sidebar got `display:none` at that same width. On a phone, the entire navigation vanished with no way to bring it back. Fixed with a real menu button, a slide-out sidebar, and a tap-outside-to-close backdrop.
-2. **Profiles had no server-side guard against self-promotion.** The Sprint 1 "users can update their own profile" policy didn't restrict which columns could change — nothing stopped a branch_user from calling the Supabase API directly and setting their own `role` to `production`. The app's UI never offered this, but RLS is the actual security boundary, not the UI. A trigger now reverts `role`/`branch` changes on self-updates unless the caller is already production.
-3. **Job creation didn't validate its own status.** The insert policy checked who was creating a job and for which branch, but never checked what status it started at — a crafted request could have inserted a job as already `ready` or `collected`. The policy now requires `status = 'incoming'` and `accepted_by is null` on every insert.
-
-Also: escaped the one place a user-derived value (the sign-in initial in the top bar) was interpolated without `escapeHtml`, for defense in depth even though email format makes it low risk in practice. And updated `docs/database.md`, which still described the old "hand-edit branch in SQL" setup flow from before Settings existed.
-
-All four migrations (`202608020001` through `202608020004`) must run in order for a fresh database; on an existing one, only `202608020004_qa_rls_hardening.sql` is new for this sprint.
-
-**Hotfix, same sprint:** the two staff-management policies from Sprint 6 broke every login with `infinite recursion detected in policy for relation "profiles"` — a policy on `profiles` was querying `profiles` again from inside its own condition, which is unsafe RLS regardless of how correct the logic looks. Fixed in `202608020005_fix_profiles_recursion.sql` using a `SECURITY DEFINER` helper function (`public.is_production()`), the standard Postgres pattern for this. Run this migration too, after `202608020004`.
-
-**Three more issues found during real device testing:**
-
-1. **Realtime showed "Offline" on the live Netlify site but worked locally.** `netlify.toml`'s CSP `connect-src` allowed `https://*.supabase.co` but not `wss://*.supabase.co` — Realtime connects over a WebSocket, a separate scheme CSP doesn't infer from an `https://` entry. Local `vite dev` never sends a CSP header at all, so it worked there and nowhere else. Fixed in `netlify.toml`; takes effect on the next Netlify deploy, no migration needed.
-2. **T-shirt flex jobs could never move past Queued.** `WORKFLOWS.flex` in `src/config.js` has always stepped through a `'Cutting'` stage, but the `job_state` enum only ever had `contour_cutting` (the sticker-specific step) — there was no plain `cutting` value at all. This has been broken since the original schema, not something a later sprint introduced. Fixed with a new enum value in `202608020007_add_cutting_status.sql` plus a matching `STATUS_LABELS` entry — flex jobs now get their own "Cutting" board column, separate from stickers' "Contour Cutting".
-3. **The Roland BN-20 status was never real.** It was a hardcoded `<article>` since Sprint 1/2, literally labeled "Manual status for Sprint 2" in the code — always showing "Ready" regardless of anything. Rather than just explain that away, it's now backed by a real `machines` table (`202608020008_machine_status.sql`): everyone sees the current status, production can tap it to cycle Ready → Printing → Cutting → Maintenance, and it syncs live via Realtime like Stock and Jobs.
+Event handlers split into modules for maintainability.
 
 ## Run locally
 
 1. Copy `.env.example` to `.env`.
 2. Enter your Supabase Project URL and anon/publishable key.
 3. Run `npm install` and then `npm run dev`.
-4. Apply `supabase/migrations/202607270001_initial_schema.sql` in the Supabase SQL Editor before creating users. Then follow [the database setup notes](docs/database.md) to create the first production user.
+4. Apply the migrations in order (see below) in the Supabase SQL Editor before creating users. Then follow the database setup notes to create the first production user.
+
+## Supabase Migrations (order)
+
+Apply these in the Supabase SQL Editor in **exact** order:
+
+1. `202607270001_initial_schema.sql`
+2. `202607270002_production_job_submission.sql`
+3. `202608020001_realtime_jobs.sql`
+4. `202608020002_stock_tracking.sql`
+5. `202608020003_staff_management.sql`
+6. `202608020004_qa_rls_hardening.sql`
+7. `202608020005_fix_profiles_recursion.sql`
+8. `202608020006_stock_unit_kg.sql`
+9. `202608020007_add_cutting_status.sql`
+10. `202608020008_machine_status.sql`
+11. `202608020009_workflow_enforcement.sql`
+12. `202608020010_sla_fields.sql`
+13. `202608020011_job_events.sql`
+
+All migrations are idempotent where possible and preserve existing data.
 
 ## Deployment
 
@@ -85,7 +86,20 @@ Netlify is configured to build with `npm run build` and publish `dist`. Add the 
 
 ## Product scope
 
-- Sticker materials: Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision
-- T-shirt flex: White Flex, Gold Flex, Silver Flex
-- Branches: Plettenberg Bay, Knysna, Waterside, Sedgefield
-- Artwork source: email references to PDF and CDR files only; never uploads
+- **Sticker materials**: Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision (all in kg)
+- **T‑shirt flex**: White Flex, Gold Flex, Silver Flex (all in sheets)
+- **Branches**: Plettenberg Bay, Knysna, Waterside, Sedgefield
+- **Artwork source**: email references to PDF and CDR files only; never uploads
+- **Standard turnaround**: 24–48 hours for normal jobs. Rush/Urgent require production centre confirmation.
+- **Workflows**:
+  - Stickers: Incoming → Queued → Printing → Drying → Contour Cutting → Weeding → Quality Check → Ready → Collected
+  - Flex: Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected
+- **Correction**: Active job → Rejected (with reason) → Branch corrects → Resubmitted → Incoming
+
+## Security
+
+- Row Level Security (RLS) is enforced on all tables.
+- Only production users can promote or change roles/branches.
+- Workflow transitions are enforced at the database level – the UI is not the security boundary.
+- Material compatibility is checked on insert/update.
+- The `service_role` key is never used in the frontend.

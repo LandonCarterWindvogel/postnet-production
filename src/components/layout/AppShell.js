@@ -13,8 +13,19 @@ const CONNECTION_LABELS = {
 };
 
 export function renderAppShell({ profile, session, currentPage, content, connectionStatus, mobileNavOpen }) {
-  const nav = NAV_ITEMS.map(([id, label]) =>
-    `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}"><span>${NAV_ICONS[id]}</span>${label}</button>`
+  // Determine nav items: add Dashboard for branch users, or keep as is for production
+  let navItems = [...NAV_ITEMS];
+  if (!isProduction(profile)) {
+    // Insert dashboard after board
+    navItems = [
+      ['board', 'Production Board'],
+      ['dashboard', 'Dashboard'],
+      ...NAV_ITEMS.slice(1) // new-job, my-jobs, stock, settings
+    ];
+  }
+
+  const nav = navItems.map(([id, label]) =>
+    `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}"><span>${NAV_ICONS[id] || ''}</span>${label}</button>`
   ).join('');
 
   const connectionLabel = CONNECTION_LABELS[connectionStatus] || CONNECTION_LABELS.disconnected;

@@ -1,12 +1,20 @@
 // UI-only state: which page is showing, which job is selected, and any
 // active toast notifications. Session/profile live in authStore.js, jobs
-// live in jobStore.js — this file only tracks navigation + toasts.
+// live in jobStore.js — this file only tracks navigation + toasts + filters.
 
 const state = {
   page: 'board',
   selectedId: null,
   toasts: [],
-  mobileNavOpen: false
+  mobileNavOpen: false,
+  searchQuery: '',
+  filters: {
+    branch: '',
+    priority: '',
+    status: '',
+    type: '',
+    material: ''
+  }
 };
 
 const listeners = new Set();
@@ -42,8 +50,6 @@ export function toggleMobileNav() {
   notify();
 }
 
-// Auto-dismisses after 6 seconds; can also be dismissed by clicking it
-// (see the [data-dismiss-toast] handler in app.js).
 export function pushToast(message) {
   const id = crypto.randomUUID();
   state.toasts = [...state.toasts, { id, message }];
@@ -53,5 +59,15 @@ export function pushToast(message) {
 
 export function dismissToast(id) {
   state.toasts = state.toasts.filter((toast) => toast.id !== id);
+  notify();
+}
+
+export function setSearchQuery(query) {
+  state.searchQuery = query;
+  notify();
+}
+
+export function setFilters(filters) {
+  state.filters = { ...state.filters, ...filters };
   notify();
 }
