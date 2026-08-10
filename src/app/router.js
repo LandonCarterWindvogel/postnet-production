@@ -1,7 +1,7 @@
 // Maps the current page id to the HTML for that page. This is the only
 // file that needs to change when a new nav destination is added.
 
-import { renderProductionBoard } from '../components/board/ProductionBoard.js';
+import { renderProductionBoard, jobCard } from '../components/board/ProductionBoard.js';
 import { renderNewJobForm } from '../components/jobs/NewJobForm.js';
 import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';

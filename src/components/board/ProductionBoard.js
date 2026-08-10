@@ -16,7 +16,8 @@ export function jobCard(job) {
   const priorityClass = job.priority === 'urgent' ? 'priority-urgent' : (job.priority === 'rush' ? 'priority-rush' : '');
   const expectedBy = job.expected_ready_by ? formatDateTime(job.expected_ready_by) : '—';
 
-  return `<article class="job-card ${priorityClass} ${job.status === 'rejected' ? 'status-rejected' : ''}">
+  // Make the entire card clickable by adding data-open-job and cursor:pointer
+  return `<article class="job-card ${priorityClass} ${job.status === 'rejected' ? 'status-rejected' : ''}" data-open-job="${job.id}" style="cursor:pointer;">
     <div class="job-card__top">
       <span class="job-id">${formatJobNumber(job)}</span>
       <span class="priority">${job.priority}</span>
