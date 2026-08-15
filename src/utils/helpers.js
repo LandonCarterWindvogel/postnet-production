@@ -2,7 +2,7 @@
 // Kept framework-free and pure so it is easy to unit test later.
 
 import { WORKFLOWS } from '../config.js';
-import { STATUS_LABELS, CLOSED_STATUSES } from './constants.js';
+import { CLOSED_STATUSES } from './constants.js';
 
 export function isProduction(profile) {
   return profile?.role === 'production';
@@ -21,11 +21,14 @@ export function computeNextStatus(job) {
   if (job.status === 'incoming') return 'queued';
 
   const steps = WORKFLOWS[job.job_type];
-  const currentIndex = steps.indexOf(STATUS_LABELS[job.status]);
+  if (!steps) return null;
 
-  if (currentIndex < steps.length - 1) {
-    const nextLabel = steps[currentIndex + 1];
-    return Object.keys(STATUS_LABELS).find((key) => STATUS_LABELS[key] === nextLabel);
+  // Workflows use internal status keys, not display labels. This is important
+  // because sticker contour_cutting and Flex cutting are shown as one board stage.
+  const currentIndex = steps.indexOf(job.status);
+
+  if (currentIndex >= 0 && currentIndex < steps.length - 1) {
+    return steps[currentIndex + 1];
   }
 
   return job.status === 'ready' ? 'collected' : null;

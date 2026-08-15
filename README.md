@@ -36,7 +36,18 @@ Production users can edit any profile’s name, branch, and role directly from t
 
 In‑app toasts for relevant events (new job for production; ready/returned for branch). Fixed mobile nav, self‑promotion RLS loophole, job creation status validation, escaped user‑derived values, and updated documentation.
 
-### Sprint 8 — Workflow enforcement & job events (current)
+### Sprint 8 — Workflow enforcement & job events
+
+### Sprint 9 — Production board and machine-status fixes (current)
+
+- **Shared Cutting stage** – the Production Board now displays one Cutting column for both sticker contour cutting and T-shirt Flex cutting. The database still keeps `contour_cutting` and `cutting` as separate internal statuses.
+- **Correct Flex progression** – workflow calculations now use internal status keys instead of display labels, preventing the shared Cutting label from accidentally sending a Flex job down the sticker path. Flex remains `Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`.
+- **Sticker progression preserved** – sticker jobs remain `Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`, with `contour_cutting` retained internally.
+- **Focused board** – production-only stages are shown when relevant to the active jobs, reducing empty columns without changing the underlying workflow.
+- **Machine status** – the Roland BN-20 card now shows queue-derived Printing/Cutting/Ready state. Maintenance remains a manual override. This is production-queue state, not direct machine telemetry; the app does not have a VersaWorks/BN-20 hardware API connection.
+- **Netlify Realtime CSP** – the Content Security Policy explicitly permits Supabase HTTPS API traffic and secure WebSocket Realtime connections (`wss://*.supabase.co`).
+
+### Sprint 8 — Workflow enforcement & job events (previous)
 
 - **Database‑enforced workflow transitions** – status can only move forward according to the correct workflow for the job type.
 - **Material compatibility** – sticker jobs can only use sticker materials; flex jobs only flex materials.
@@ -92,8 +103,9 @@ Netlify is configured to build with `npm run build` and publish `dist`. Add the 
 - **Artwork source**: email references to PDF and CDR files only; never uploads
 - **Standard turnaround**: 24–48 hours for normal jobs. Rush/Urgent require production centre confirmation.
 - **Workflows**:
-  - Stickers: Incoming → Queued → Printing → Drying → Contour Cutting → Weeding → Quality Check → Ready → Collected
-  - Flex: Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected
+  - Stickers: Incoming → Queued → Printing → Drying → Cutting (internal `contour_cutting`) → Weeding → Quality Check → Ready → Collected
+  - Flex: Incoming → Queued → Cutting (internal `cutting`) → Weeding → Heat Press → Quality Check → Ready → Collected
+  - The board visually combines the two cutting statuses into one Cutting stage; the internal statuses remain distinct for workflow enforcement and history.
 - **Correction**: Active job → Rejected (with reason) → Branch corrects → Resubmitted → Incoming
 
 ## Security

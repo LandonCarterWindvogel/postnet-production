@@ -1,7 +1,7 @@
 // Renders the main Production Board: one column per workflow status, with
 // jobCard() exported separately since the My Jobs page reuses it.
 
-import { BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS } from '../../utils/constants.js';
+import { BOARD_COLUMNS, BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS } from '../../utils/constants.js';
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
 import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
@@ -37,12 +37,30 @@ export function jobCard(job) {
   </article>`;
 }
 
-function machineCard(machine, canEdit) {
+function getDerivedMachineStatus(machine, jobs) {
+  if (!machine) return null;
+  if (machine.status === 'maintenance') return 'maintenance';
+
+  // This is queue-derived production state, not hardware telemetry.
+  // The app has no direct VersaWorks/BN-20 API connection.
+  const priorityOrder = { urgent: 0, rush: 1, normal: 2 };
+  const machineJobs = jobs
+    .filter((job) => ['printing', 'drying', 'cutting', 'contour_cutting'].includes(job.status))
+    .slice()
+    .sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2) || new Date(a.created_at) - new Date(b.created_at));
+  const currentJob = machineJobs[0];
+  if (currentJob && ['printing', 'drying'].includes(currentJob.status)) return 'printing';
+  if (currentJob && ['cutting', 'contour_cutting'].includes(currentJob.status)) return 'cutting';
+  return 'ready';
+}
+
+function machineCard(machine, canEdit, jobs = []) {
   if (!machine) return `<article class="machine"><span>Machines</span><strong>—</strong><small>No machines set up</small></article>`;
-  return `<article class="machine status-${machine.status} ${canEdit ? 'machine--editable' : ''}" ${canEdit ? `data-cycle-machine="${machine.id}"` : ''}>
+  const status = getDerivedMachineStatus(machine, jobs);
+  return `<article class="machine status-${status} ${canEdit ? 'machine--editable' : ''}" ${canEdit ? `data-cycle-machine="${machine.id}"` : ''}>
     <span>${escapeHtml(machine.name)}</span>
-    <strong><i></i> ${MACHINE_STATUS_LABELS[machine.status] || machine.status}</strong>
-    <small>${canEdit ? 'Tap to update' : 'Machine status'}</small>
+    <strong><i></i> ${MACHINE_STATUS_LABELS[status] || status}</strong>
+    <small>${machine.status === 'maintenance' ? 'Maintenance override' : 'Based on active production jobs'}</small>
   </article>`;
 }
 
@@ -90,13 +108,25 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
     });
   };
 
-  const columns = BOARD_STATUSES.map((status) => {
-    const columnJobs = sortJobs(filtered.filter((job) => job.status === status));
-    return `<div class="board-column">
-      <header><h2>${STATUS_LABELS[status]}</h2><span>${columnJobs.length}</span></header>
-      <div class="job-list">${columnJobs.map(jobCard).join('') || '<p class="empty">No jobs here</p>'}</div>
-    </div>`;
-  }).join('');
+  // The board has one visual Cutting stage for both production paths.
+  // Sticker contour_cutting and Flex cutting remain separate internal statuses.
+  // Empty stages that do not belong to any active job type are hidden to keep the
+  // production board focused; shared stages remain visible when relevant.
+  const relevantStatuses = new Set(
+    filtered.flatMap((job) => job.job_type === 'flex'
+      ? ['queued', 'cutting', 'weeding', 'heat_press', 'quality_check', 'ready']
+      : ['queued', 'printing', 'drying', 'contour_cutting', 'weeding', 'quality_check', 'ready'])
+  );
+
+  const columns = BOARD_COLUMNS
+    .filter((column) => column.statuses.some((status) => relevantStatuses.has(status)) || (column.key === 'incoming' && filtered.some((job) => job.status === 'incoming')))
+    .map((column) => {
+      const columnJobs = sortJobs(filtered.filter((job) => column.statuses.includes(job.status)));
+      return `<div class="board-column">
+        <header><h2>${column.label}</h2><span>${columnJobs.length}</span></header>
+        <div class="job-list">${columnJobs.map(jobCard).join('') || '<p class="empty">No jobs here</p>'}</div>
+      </div>`;
+    }).join('');
 
   // Filter UI (compact)
   const filterHtml = `
@@ -104,7 +134,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
       <input type="text" id="search-input" placeholder="Search jobs..." value="${escapeHtml(searchQuery)}">
       <select id="filter-branch"><option value="">All Branches</option><option value="Plettenberg Bay">Plettenberg Bay</option><option value="Knysna">Knysna</option><option value="Waterside">Waterside</option><option value="Sedgefield">Sedgefield</option></select>
       <select id="filter-priority"><option value="">All Priorities</option><option value="normal">Normal</option><option value="rush">Rush</option><option value="urgent">Urgent</option></select>
-      <select id="filter-status"><option value="">All Statuses</option>${BOARD_STATUSES.map(s => `<option value="${s}">${STATUS_LABELS[s]}</option>`).join('')}</select>
+      <select id="filter-status"><option value="">All Statuses</option>${BOARD_STATUSES.map(s => `<option value="${s}">${s === 'cutting' ? 'Cutting — T-shirt Flex' : s === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[s]}</option>`).join('')}</select>
       <select id="filter-type"><option value="">All Types</option><option value="stickers">Stickers</option><option value="flex">T-shirt Flex</option></select>
       <select id="filter-material"><option value="">All Materials</option>${Array.from(new Set(active.map(j => j.material))).map(m => `<option value="${m}">${m}</option>`).join('')}</select>
     </div>
@@ -136,7 +166,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
       <article><span>Active jobs</span><strong>${active.length}</strong><small>Across all production stages</small></article>
       <article><span>Urgent</span><strong>${active.filter((job) => job.priority === 'urgent').length}</strong><small>Needs attention first</small></article>
       <article><span>Ready today</span><strong>${active.filter((job) => job.status === 'ready').length}</strong><small>Awaiting collection</small></article>
-      ${machines.map((machine) => machineCard(machine, canEditMachines)).join('') || machineCard(null, canEditMachines)}
+      ${machines.map((machine) => machineCard(machine, canEditMachines, active)).join('') || machineCard(null, canEditMachines, active)}
     </section>
     ${renderNeedsAttention(summary)}
     ${filterHtml}
