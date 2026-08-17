@@ -2,6 +2,7 @@
 
 import { NAV_ITEMS } from '../../config.js';
 import { NAV_ICONS } from '../../utils/constants.js';
+import { POSTNET_COPY_PRINT_MARK } from '../../utils/brandAssets.js';
 import { escapeHtml } from '../../utils/formatters.js';
 import { isProduction } from '../../utils/helpers.js';
 
@@ -13,10 +14,7 @@ const CONNECTION_LABELS = {
 
 function renderBrand() {
   return `<a class="brand" aria-label="PostNet Production Management System">
-    <span class="brand__mark">
-      <strong>POSTNET</strong>
-      <em>copy &amp; print</em>
-    </span>
+    <img class="brand__logo" src="${POSTNET_COPY_PRINT_MARK}" alt="PostNet Copy & Print">
     <span class="brand__system">Production<br>Management</span>
   </a>`;
 }
