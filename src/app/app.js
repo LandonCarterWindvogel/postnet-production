@@ -3,6 +3,7 @@
 import { MATERIALS } from '../utils/constants.js';
 import { validateJobForm } from '../utils/validators.js';
 import { isProduction, isOverdue } from '../utils/helpers.js';
+import { setBoardPage } from '../components/board/ProductionBoard.js';
 import { renderAppShell } from '../components/layout/AppShell.js';
 import { renderLoginView } from '../components/auth/LoginView.js';
 import { renderToasts } from '../components/layout/Toasts.js';
@@ -130,9 +131,6 @@ function updateMaterialUi() {
   const warning = form.querySelector('#stock-warning');
   const selected = form.querySelector('#selected-material-label');
   if (selected && material) selected.textContent = material.value;
-
-  // Stock is currently a live informational warning rendered by the Stock store.
-  // The authoritative availability check remains server-side.
   if (warning) warning.textContent = '';
 }
 
@@ -147,6 +145,13 @@ function bindEvents() {
     const wizardBack = event.target.closest('[data-wizard-back]');
     if (wizardBack) {
       showWizardStep(Number(wizardBack.dataset.wizardBack));
+      return;
+    }
+
+    const boardPageButton = event.target.closest('[data-board-page]');
+    if (boardPageButton && !boardPageButton.disabled) {
+      setBoardPage(Number(boardPageButton.dataset.boardPage));
+      render();
       return;
     }
 
@@ -229,6 +234,7 @@ function bindEvents() {
         type: filterType ? filterType.value : '',
         material: filterMaterial ? filterMaterial.value : ''
       };
+      setBoardPage(1);
       setSearchQuery(newFilters.search);
       setFilters({
         branch: newFilters.branch,
