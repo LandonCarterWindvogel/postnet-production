@@ -1,5 +1,4 @@
 // Application entry point: wires together state, stores, router and the DOM.
-// Kept as a single event-handling file for simplicity (no separate event modules).
 
 import { MATERIALS } from '../utils/constants.js';
 import { validateJobForm } from '../utils/validators.js';
@@ -92,16 +91,71 @@ function render() {
   }) + renderToasts(ui.toasts);
 }
 
+function showWizardStep(step) {
+  document.querySelectorAll('[data-wizard-panel]').forEach((panel) => {
+    const active = Number(panel.dataset.wizardPanel) === Number(step);
+    panel.hidden = !active;
+    panel.classList.toggle('active', active);
+  });
+
+  document.querySelectorAll('[data-wizard-indicator]').forEach((indicator) => {
+    const number = Number(indicator.dataset.wizardIndicator);
+    indicator.classList.toggle('active', number === Number(step));
+    indicator.classList.toggle('complete', number < Number(step));
+  });
+
+  if (Number(step) === 3) updateWizardReview();
+}
+
+function updateWizardReview() {
+  const form = document.getElementById('job-form');
+  if (!form) return;
+  const values = new FormData(form);
+  const labels = {
+    type: values.get('type') === 'flex' ? 'T-shirt Flex' : 'Stickers',
+    priority: values.get('priority') === 'standard' ? 'Standard' : values.get('priority')?.charAt(0).toUpperCase() + values.get('priority')?.slice(1)
+  };
+
+  ['branch', 'customer', 'type', 'priority', 'emailReference', 'specification', 'quantity', 'material'].forEach((key) => {
+    const target = form.querySelector(`[data-review="${key}"]`);
+    if (!target) return;
+    target.textContent = labels[key] || values.get(key) || '—';
+  });
+}
+
+function updateMaterialUi() {
+  const form = document.getElementById('job-form');
+  if (!form) return;
+  const material = form.querySelector('#material');
+  const warning = form.querySelector('#stock-warning');
+  const selected = form.querySelector('#selected-material-label');
+  if (selected && material) selected.textContent = material.value;
+
+  // Stock is currently a live informational warning rendered by the Stock store.
+  // The authoritative availability check remains server-side.
+  if (warning) warning.textContent = '';
+}
+
 function bindEvents() {
-  // -------- CLICK events --------
   appEl.addEventListener('click', async (event) => {
+    const wizardNext = event.target.closest('[data-wizard-next]');
+    if (wizardNext) {
+      showWizardStep(Number(wizardNext.dataset.wizardNext));
+      return;
+    }
+
+    const wizardBack = event.target.closest('[data-wizard-back]');
+    if (wizardBack) {
+      showWizardStep(Number(wizardBack.dataset.wizardBack));
+      return;
+    }
+
     const target = event.target.closest('[data-page]');
     if (target) setPage(target.dataset.page);
 
     const openJob = event.target.closest('[data-open-job]');
     if (openJob) {
       const jobId = openJob.dataset.openJob;
-      // Fetch events for this job before opening details
       await fetchJobEvents(jobId);
       selectJob(jobId);
     }
@@ -135,7 +189,6 @@ function bindEvents() {
       setPage('board');
     }
 
-    // Advance job
     const advanceBtn = event.target.closest('[data-advance]');
     if (advanceBtn) {
       const job = getJobState().jobs.find((j) => j.id === advanceBtn.dataset.advance);
@@ -145,11 +198,8 @@ function bindEvents() {
         setJobsError(error.message);
       }
     }
-
-    // Confirm rush/urgent (we'll add a button in JobDetails later; for now, just a placeholder)
   });
 
-  // -------- CHANGE events (job type → material; search/filters) --------
   appEl.addEventListener('change', (event) => {
     if (event.target.id === 'job-type') {
       const materialSelect = document.querySelector('#material');
@@ -158,9 +208,11 @@ function bindEvents() {
           .map((v) => `<option>${v}</option>`)
           .join('');
       }
+      updateMaterialUi();
     }
 
-    // Search/filter updates – we'll read from the board's inputs
+    if (event.target.id === 'material') updateMaterialUi();
+
     const searchInput = document.getElementById('search-input');
     const filterBranch = document.getElementById('filter-branch');
     const filterPriority = document.getElementById('filter-priority');
@@ -188,11 +240,9 @@ function bindEvents() {
     }
   });
 
-  // -------- SUBMIT events --------
   appEl.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    // Login
     if (event.target.id === 'login-form') {
       const form = new FormData(event.target);
       const messageEl = event.target.querySelector('.form-error');
@@ -211,7 +261,6 @@ function bindEvents() {
       return;
     }
 
-    // Reject form (return for correction)
     if (event.target.id === 'reject-form') {
       const jobId = event.target.dataset.jobId;
       const form = new FormData(event.target);
@@ -219,9 +268,8 @@ function bindEvents() {
       const job = getJobState().jobs.find((j) => j.id === jobId);
       try {
         await rejectJob(job, form.get('reason'));
-        // After rejection, stay on the job details page but show updated status
         await fetchJobEvents(jobId);
-        render(); // re-render to show new status and events
+        render();
       } catch (error) {
         if (messageEl) messageEl.textContent = error.message;
         else setJobsError(error.message);
@@ -229,7 +277,6 @@ function bindEvents() {
       return;
     }
 
-    // Resubmit form (branch resubmits rejected job)
     if (event.target.id === 'resubmit-form') {
       const jobId = event.target.dataset.jobId;
       const messageEl = event.target.querySelector('.form-error');
@@ -245,7 +292,6 @@ function bindEvents() {
       return;
     }
 
-    // Stock update
     if (event.target.classList.contains('stock-row__form')) {
       const stockId = event.target.dataset.stockId;
       const form = new FormData(event.target);
@@ -262,7 +308,6 @@ function bindEvents() {
       return;
     }
 
-    // Staff update
     if (event.target.classList.contains('staff-row__form')) {
       const staffId = event.target.dataset.staffId;
       const form = new FormData(event.target);
@@ -280,7 +325,6 @@ function bindEvents() {
       return;
     }
 
-    // New Job form
     if (event.target.id === 'job-form') {
       const form = new FormData(event.target);
       const messageEl = event.target.querySelector('.form-error');
@@ -295,7 +339,6 @@ function bindEvents() {
         cutlinesIncluded: form.get('cutlines') === 'on'
       };
 
-      // Validate including checklist
       const errors = validateJobForm(values);
       if (!values.artworkReceived) errors.push('Please confirm artwork was received by email.');
       if (!values.artworkPrintReady) errors.push('Please confirm artwork is print-ready and correctly sized.');
@@ -346,17 +389,11 @@ export async function initApp() {
     const profile = getAuthState().profile;
     if (!profile) return;
 
-    if (type === 'incoming' && isProduction(profile)) {
-      pushToast(`New job from ${job.branch}: ${job.customer_name}`);
-    } else if (type === 'ready' && !isProduction(profile)) {
-      pushToast(`${job.customer_name}'s job is ready for collection`);
-    } else if (type === 'rejected' && !isProduction(profile)) {
-      pushToast(`${job.customer_name}'s job was returned for correction`);
-    } else if (type === 'resubmitted' && isProduction(profile)) {
-      pushToast(`${job.customer_name}'s job was resubmitted after correction`);
-    } else if (type === 'rush_submitted' && isProduction(profile)) {
-      pushToast(`Rush/Urgent job from ${job.branch}: ${job.customer_name}`);
-    }
+    if (type === 'incoming' && isProduction(profile)) pushToast(`New job from ${job.branch}: ${job.customer_name}`);
+    else if (type === 'ready' && !isProduction(profile)) pushToast(`${job.customer_name}'s job is ready for collection`);
+    else if (type === 'rejected' && !isProduction(profile)) pushToast(`${job.customer_name}'s job was returned for correction`);
+    else if (type === 'resubmitted' && isProduction(profile)) pushToast(`${job.customer_name}'s job was resubmitted after correction`);
+    else if (type === 'rush_submitted' && isProduction(profile)) pushToast(`Rush/Urgent job from ${job.branch}: ${job.customer_name}`);
   });
 
   bindEvents();
