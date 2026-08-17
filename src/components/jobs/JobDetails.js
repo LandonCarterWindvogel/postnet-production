@@ -86,4 +86,5 @@ export function renderJobDetails(job, profile, userId) {
   </form>` : ''}
 
   ${renderJobTimeline(job)}
+}`;
 }
