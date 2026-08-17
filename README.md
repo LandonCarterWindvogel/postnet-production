@@ -1,117 +1,106 @@
 # PostNet Production
 
-PostNet Production is a progressive web app for managing sticker and T‑shirt flex work from intake through to collection. It deliberately records email artwork references instead of storing artwork files.
+PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history and role-based branch access.
 
-## Sprints
+## Current production scope
 
-### Sprint 1 — Foundation
+The production system intentionally remains focused on:
 
-Vite PWA shell, responsive Production Board, login flow, secure Supabase schema, and job‑intake interface. Job persistence, live queue updates, stock, and notifications delivered in later sprints.
+- **Stickers** — Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision
+- **T-shirt Flex** — White Flex, Gold Flex, Silver Flex
+- **Production workflows** enforced in both the UI and database
+- **Branch visibility** across the configured PostNet stores
+- **Stock tracking** by weight in **kilograms (kg)** for every material
 
-### Sprint 2 — Real jobs
+### Stores
 
-Jobs are created and persisted in Supabase. Branches submit into Incoming, Production accepts into Queued, and each job moves through its type‑specific workflow (stickers or T‑shirt flex) to Ready and Collected.
+The configured stores are:
 
-### Sprint 3 — Architecture
+- Plettenberg Bay
+- Knysna
+- Waterside
+- Sedgefield
 
-`src/main.js` became a two‑line entry point; the app is split into `app/`, `stores/`, `components/`, and `utils/`. No behavior changed.
+Production users can assign staff to these branches from Settings. Branch users only see jobs belonging to their own branch.
 
-### Sprint 4 — Workflow fixes + Realtime
+## Workflows
 
-- **Return for correction** added: Production can send any active job back to the branch with a reason.
-- **My Jobs** now filters correctly: branch users see their branch’s history; production sees jobs they personally accepted.
-- **Realtime** updates the board and My Jobs live via Supabase Realtime.
+### Stickers
 
-### Sprint 5 — Stock
+`Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`
 
-Materials table (`stock_items`) seeded with all options from the New Job form. Everyone can view; production can update. Low‑stock flag when quantity ≤ threshold. Realtime updates.
+The database keeps `contour_cutting` as the internal sticker cutting status.
 
-**Correction:** sticker materials are tracked by **weight (kg)**, not length. Flex materials remain in `sheets`.
+### T-shirt Flex
 
-### Sprint 6 — Settings / staff management
+`Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`
 
-Production users can edit any profile’s name, branch, and role directly from the Settings page. Branch users see a read‑only card of their own profile. No invite flow – new logins still created in Supabase Auth → Users.
+The database keeps `cutting` as the internal Flex cutting status.
 
-### Sprint 7 — Notifications + QA
+The Production Board deliberately renders both internal cutting statuses as one visual **Cutting** stage.
 
-In‑app toasts for relevant events (new job for production; ready/returned for branch). Fixed mobile nav, self‑promotion RLS loophole, job creation status validation, escaped user‑derived values, and updated documentation.
+## Priorities
 
-### Sprint 8 — Workflow enforcement & job events
+The application uses the same terminology everywhere:
 
-### Sprint 9 — Production board and machine-status fixes (current)
+- **Standard**
+- **Rush**
+- **Urgent**
 
-- **Shared Cutting stage** – the Production Board now displays one Cutting column for both sticker contour cutting and T-shirt Flex cutting. The database still keeps `contour_cutting` and `cutting` as separate internal statuses.
-- **Correct Flex progression** – workflow calculations now use internal status keys instead of display labels, preventing the shared Cutting label from accidentally sending a Flex job down the sticker path. Flex remains `Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`.
-- **Sticker progression preserved** – sticker jobs remain `Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`, with `contour_cutting` retained internally.
-- **Focused board** – production-only stages are shown when relevant to the active jobs, reducing empty columns without changing the underlying workflow.
-- **Machine status** – the Roland BN-20 card now shows queue-derived Printing/Cutting/Ready state. Maintenance remains a manual override. This is production-queue state, not direct machine telemetry; the app does not have a VersaWorks/BN-20 hardware API connection.
-- **Netlify Realtime CSP** – the Content Security Policy explicitly permits Supabase HTTPS API traffic and secure WebSocket Realtime connections (`wss://*.supabase.co`).
+Jobs are ordered **Urgent → Rush → Standard**, with FIFO within each priority.
 
-### Sprint 8 — Workflow enforcement & job events (previous)
+## UI
 
-- **Database‑enforced workflow transitions** – status can only move forward according to the correct workflow for the job type.
-- **Material compatibility** – sticker jobs can only use sticker materials; flex jobs only flex materials.
-- **Branch resubmission** – branch users can resubmit a rejected job after correction (back to Incoming).
-- **Job events & timeline** – every status change, creation, return, resubmission, and rush confirmation is recorded in `job_events` and displayed as a timeline on the job detail page.
-- **24–48 hour standard** – normal jobs get an `expected_ready_by` of 48 hours from creation. Rush/urgent jobs require production confirmation before an expected date is set.
-- **Rush/urgent confirmation** – production must explicitly confirm rush/urgent jobs; the UI shows a confirmation button.
-- **Search and filters** on the Production Board (by job number, customer, branch, email, material; and filters for branch, priority, status, type, material).
-- **Branch Dashboard** – branch users see counts and recent jobs.
-- **Stock warnings** on the New Job form – warns if material is low or unavailable.
-- **Production summary** – counts of overdue, urgent, returned, and ready jobs on the board.
+The current interface uses the PostNet Copy & Print visual direction supplied for the project:
 
-### Sprint 9 — Architecture cleanup (optional future)
+- PostNet red, purple, navy and white brand palette
+- Dark branded navigation sidebar
+- PostNet Copy & Print mark throughout the application
+- Compact production-stage summary strip
+- Progress indicators on job cards
+- Guided three-step New Job form
+- Cleaner Job Details and Timeline presentation
+- Stock and Settings cards designed around fast production use
+- Responsive desktop, tablet and mobile layouts
 
-Event handlers split into modules for maintainability.
+The UI redesign does not change the underlying production architecture or workflow rules.
 
-## Run locally
+## Stock
 
-1. Copy `.env.example` to `.env`.
-2. Enter your Supabase Project URL and anon/publishable key.
-3. Run `npm install` and then `npm run dev`.
-4. Apply the migrations in order (see below) in the Supabase SQL Editor before creating users. Then follow the database setup notes to create the first production user.
+All production materials are measured and displayed in **kg**.
 
-## Supabase Migrations (order)
+The migration `202608170001_all_stock_units_kg.sql` standardizes the stock unit for both sticker and Flex materials. Existing numeric quantities are intentionally not converted automatically; the migration changes the unit interpretation only. Review the values on the Stock page after applying it.
 
-Apply these in the Supabase SQL Editor in **exact** order:
-
-1. `202607270001_initial_schema.sql`
-2. `202607270002_production_job_submission.sql`
-3. `202608020001_realtime_jobs.sql`
-4. `202608020002_stock_tracking.sql`
-5. `202608020003_staff_management.sql`
-6. `202608020004_qa_rls_hardening.sql`
-7. `202608020005_fix_profiles_recursion.sql`
-8. `202608020006_stock_unit_kg.sql`
-9. `202608020007_add_cutting_status.sql`
-10. `202608020008_machine_status.sql`
-11. `202608020009_workflow_enforcement.sql`
-12. `202608020010_sla_fields.sql`
-13. `202608020011_job_events.sql`
-
-All migrations are idempotent where possible and preserve existing data.
-
-## Deployment
-
-Netlify is configured to build with `npm run build` and publish `dist`. Add the same two `VITE_SUPABASE_*` variables in the Netlify site settings.
-
-## Product scope
-
-- **Sticker materials**: Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision (all in kg)
-- **T‑shirt flex**: White Flex, Gold Flex, Silver Flex (all in sheets)
-- **Branches**: Plettenberg Bay, Knysna, Waterside, Sedgefield
-- **Artwork source**: email references to PDF and CDR files only; never uploads
-- **Standard turnaround**: 24–48 hours for normal jobs. Rush/Urgent require production centre confirmation.
-- **Workflows**:
-  - Stickers: Incoming → Queued → Printing → Drying → Cutting (internal `contour_cutting`) → Weeding → Quality Check → Ready → Collected
-  - Flex: Incoming → Queued → Cutting (internal `cutting`) → Weeding → Heat Press → Quality Check → Ready → Collected
-  - The board visually combines the two cutting statuses into one Cutting stage; the internal statuses remain distinct for workflow enforcement and history.
-- **Correction**: Active job → Rejected (with reason) → Branch corrects → Resubmitted → Incoming
+Stock is manually adjusted by production. The application does not guess material consumption because a job does not currently contain a reliable per-unit material usage rate.
 
 ## Security
 
-- Row Level Security (RLS) is enforced on all tables.
-- Only production users can promote or change roles/branches.
-- Workflow transitions are enforced at the database level – the UI is not the security boundary.
-- Material compatibility is checked on insert/update.
-- The `service_role` key is never used in the frontend.
+- Row Level Security is enabled on production tables.
+- Database workflow transitions are enforced server-side; the UI is not the security boundary.
+- Branch users can only access their branch's jobs.
+- Production users can manage production data and staff settings.
+- The frontend never uses the Supabase `service_role` key.
+- User-derived HTML is escaped before rendering.
+- Netlify sends security headers and allows Supabase HTTPS and secure Realtime WebSocket connections.
+
+## Development
+
+1. Copy `.env.example` to `.env`.
+2. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or the project's configured publishable key).
+3. Run `npm install`.
+4. Run `npm run dev`.
+5. Run `npm run build` before committing production changes.
+
+### Supabase migrations
+
+Apply migrations in filename order when setting up a new database. Do not rerun migrations that have already been applied to the production database.
+
+The latest UI/stock release adds:
+
+`202608170001_all_stock_units_kg.sql`
+
+This migration is safe to rerun and only standardizes the stored unit label to `kg` for the existing stock categories.
+
+## Deployment
+
+Netlify is configured to run `npm run build` and publish `dist`. The site requires the same Supabase environment variables in Netlify Site settings.
