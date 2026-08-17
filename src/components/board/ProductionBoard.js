@@ -104,6 +104,7 @@ export function jobCard(job) {
 export function renderProductionBoard({ jobs, profile, error, machines = [], searchQuery = '', filters = {} }) {
   const canEditMachines = isProduction(profile);
   const active = jobs.filter((job) => !isClosed(job));
+  const returnedJobs = jobs.filter((job) => job.status === 'rejected');
 
   let filtered = active;
   const query = searchQuery.trim().toLowerCase();
@@ -141,8 +142,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
 
   const overdue = active.filter((job) => job.expected_ready_by && new Date() > new Date(job.expected_ready_by));
   const urgent = active.filter((job) => job.priority === 'urgent');
-  const returned = jobs.filter((job) => job.status === 'rejected');
-  const summary = { overdue: overdue.length, urgent: urgent.length, returned: returned.length, ready: counts.ready };
+  const summary = { overdue: overdue.length, urgent: urgent.length, returned: returnedJobs.length, ready: counts.ready, returnedJobs };
 
   const statusItems = [
     ['All', counts.all, ''],
