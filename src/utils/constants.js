@@ -6,8 +6,6 @@ export const STATUS_LABELS = {
   cutting: 'Cutting',
   printing: 'Printing',
   drying: 'Drying',
-  // Internal status remains contour_cutting for sticker jobs, but the board
-  // intentionally presents it as the shared Cutting production stage.
   contour_cutting: 'Cutting',
   weeding: 'Weeding',
   heat_press: 'Heat Press',
@@ -17,12 +15,8 @@ export const STATUS_LABELS = {
   rejected: 'Rejected'
 };
 
-// Statuses that are "closed" — a job here has left the active workflow,
-// either because it's done (Collected) or because it was sent back to the
-// branch for correction (Rejected).
 export const CLOSED_STATUSES = ['collected', 'rejected'];
 
-// The Production Board only shows the active in-progress columns.
 export const BOARD_COLUMNS = [
   { key: 'incoming', label: 'Incoming', statuses: ['incoming'] },
   { key: 'queued', label: 'Queued', statuses: ['queued'] },
@@ -35,11 +29,14 @@ export const BOARD_COLUMNS = [
   { key: 'ready', label: 'Ready', statuses: ['ready'] }
 ];
 
-// Internal statuses are retained for filtering, workflow enforcement, and event history.
 export const BOARD_STATUSES = BOARD_COLUMNS.flatMap((column) => column.statuses);
 
-
-export const BRANCHES = ['Plettenberg Bay', 'Knysna', 'Waterside', 'Sedgefield'];
+export const BRANCHES = [
+  'Plettenberg Bay',
+  'Knysna',
+  'Waterside',
+  'Sedgefield'
+];
 
 export const ROLE_LABELS = {
   production: 'Production',
@@ -59,10 +56,16 @@ export const MATERIALS = {
   flex: ['White Flex', 'Gold Flex', 'Silver Flex']
 };
 
+export const STOCK_UNITS = {
+  stickers: 'kg',
+  flex: 'kg'
+};
+
 export const NAV_ICONS = {
   board: '▦',
   'new-job': '+',
   'my-jobs': '◷',
   stock: '◫',
-  settings: '⚙'
+  settings: '⚙',
+  dashboard: '⌂'
 };
