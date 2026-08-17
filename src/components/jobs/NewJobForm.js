@@ -31,7 +31,7 @@ export function renderNewJobForm(profile, stockItems = []) {
   return `<section class="page-heading">
       <div><p class="eyebrow">Production intake</p><h1>New Job</h1><p>Capture the production requirements from the customer's approved artwork email.</p></div>
     </section>
-    <form class="job-form job-form--wizard" id="job-form">
+    <form class="job-form job-form--wizard" id="job-form" novalidate>
       ${stepper()}
 
       <section class="wizard-panel active" data-wizard-panel="1">
@@ -43,6 +43,7 @@ export function renderNewJobForm(profile, stockItems = []) {
           <label>Priority<select name="priority"><option value="standard">Standard (24–48 hours)</option><option value="rush">Rush (needs production confirmation)</option><option value="urgent">Urgent (needs production confirmation)</option></select></label>
           <label class="form-grid__full">Email subject / reference<input name="emailReference" required placeholder="RE: Sticker order — Ocean Blue"></label>
         </div>
+        <p class="form-error" data-wizard-error="1" role="alert"></p>
         <div class="wizard-actions"><span></span><button type="button" class="button button--primary" data-wizard-next="2">Next</button></div>
       </section>
 
@@ -56,6 +57,7 @@ export function renderNewJobForm(profile, stockItems = []) {
         <div class="material-summary">
           <span>Selected material</span><strong id="selected-material-label">Gloss Vinyl</strong><small>Stock is tracked in kilograms (kg).</small>
         </div>
+        <p class="form-error" data-wizard-error="2" role="alert"></p>
         <div class="wizard-actions"><button type="button" class="button button--ghost" data-wizard-back="1">Back</button><button type="button" class="button button--primary" data-wizard-next="3">Next</button></div>
       </section>
 
@@ -83,7 +85,7 @@ export function renderNewJobForm(profile, stockItems = []) {
           <label class="check"><input type="checkbox" name="cutlines"> Cutlines included</label>
           <p class="hint">For sticker jobs, cutlines are strongly recommended.</p>
         </div>
-        <p class="form-error"></p>
+        <p class="form-error" data-wizard-error="3" role="alert"></p>
         <div class="wizard-actions"><button type="button" class="button button--ghost" data-wizard-back="2">Back</button><button class="button button--primary">Submit Job</button></div>
       </section>
     </form>`;
