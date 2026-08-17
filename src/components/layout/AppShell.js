@@ -1,5 +1,4 @@
-// The signed-in app frame: sidebar nav, top bar, and a slot for whichever
-// page router.js decided to render.
+// The signed-in app frame: PostNet-branded sidebar, top bar, and page content.
 
 import { NAV_ITEMS } from '../../config.js';
 import { NAV_ICONS } from '../../utils/constants.js';
@@ -12,40 +11,64 @@ const CONNECTION_LABELS = {
   disconnected: 'Offline'
 };
 
+function renderBrand() {
+  return `<a class="brand" aria-label="PostNet Production Management System">
+    <span class="brand__mark">
+      <strong>POSTNET</strong>
+      <em>copy &amp; print</em>
+    </span>
+    <span class="brand__system">Production<br>Management</span>
+  </a>`;
+}
+
 export function renderAppShell({ profile, session, currentPage, content, connectionStatus, mobileNavOpen }) {
-  // Determine nav items: add Dashboard for branch users, or keep as is for production
   let navItems = [...NAV_ITEMS];
   if (!isProduction(profile)) {
-    // Insert dashboard after board
     navItems = [
       ['board', 'Production Board'],
       ['dashboard', 'Dashboard'],
-      ...NAV_ITEMS.slice(1) // new-job, my-jobs, stock, settings
+      ...NAV_ITEMS.slice(1)
     ];
   }
 
   const nav = navItems.map(([id, label]) =>
-    `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}"><span>${NAV_ICONS[id] || ''}</span>${label}</button>`
+    `<button class="nav-item ${currentPage === id ? 'active' : ''}" data-page="${id}" aria-current="${currentPage === id ? 'page' : 'false'}">
+      <span class="nav-item__icon" aria-hidden="true">${NAV_ICONS[id] || ''}</span>
+      <span>${label}</span>
+    </button>`
   ).join('');
 
   const connectionLabel = CONNECTION_LABELS[connectionStatus] || CONNECTION_LABELS.disconnected;
   const connectionClass = connectionStatus === 'connected' ? 'connected' : '';
+  const initials = (session.user.email || 'U').slice(0, 1).toUpperCase();
 
   return `<div class="app-shell">
       <aside class="sidebar ${mobileNavOpen ? 'sidebar--open' : ''}">
-        <a class="brand"><span>PN</span><b>PostNet<br>Production</b></a>
-        <nav>${nav}</nav>
-        <div class="sidebar-footer">
-          <small>${isProduction(profile) ? 'Production Centre' : 'Branch'}</small>
-          <strong>${escapeHtml(profile?.branch)}</strong>
+        ${renderBrand()}
+        <nav class="sidebar__nav" aria-label="Main navigation">${nav}</nav>
+        <div class="sidebar__footer">
+          <div class="profile-chip">
+            <span class="profile-chip__avatar">${initials}</span>
+            <span class="profile-chip__copy">
+              <strong>${escapeHtml(profile?.full_name || session.user.email)}</strong>
+              <small>${isProduction(profile) ? 'Production Centre' : escapeHtml(profile?.branch || 'Branch')}</small>
+            </span>
+          </div>
         </div>
       </aside>
       ${mobileNavOpen ? '<div class="sidebar-backdrop" data-toggle-nav></div>' : ''}
       <main>
         <header class="topbar">
           <button class="menu-button" data-toggle-nav aria-label="Open menu">☰</button>
-          <div class="connection ${connectionClass}"><i></i>${connectionLabel}</div>
-          <div class="user-menu"><span>${escapeHtml(session.user.email.slice(0, 1).toUpperCase())}</span><button data-signout>Sign out</button></div>
+          <div class="topbar__context">
+            <span class="topbar__label">PostNet Copy &amp; Print</span>
+            <span class="connection ${connectionClass}"><i></i>${connectionLabel}</span>
+          </div>
+          <div class="user-menu">
+            <span class="user-menu__avatar">${initials}</span>
+            <div class="user-menu__copy"><strong>${escapeHtml(profile?.full_name || session.user.email)}</strong><small>${isProduction(profile) ? 'Production Centre' : escapeHtml(profile?.branch || '')}</small></div>
+            <button data-signout>Sign out</button>
+          </div>
         </header>
         <div class="content">${content}</div>
       </main>
