@@ -1,11 +1,12 @@
 // Renders a single job's detail page, including the action button that
 // advances it to the next workflow status (production role only).
-// Also shows timeline and correction history.
+// Also shows timeline, correction history and the current machine-time estimate.
 
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
 import { STATUS_LABELS } from '../../utils/constants.js';
 import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
+import { estimateMachineTime } from '../../utils/machineTimeEstimator.js';
 import { renderJobTimeline } from './JobTimeline.js';
 
 export function renderJobDetails(job, profile, userId) {
@@ -16,6 +17,22 @@ export function renderJobDetails(job, profile, userId) {
 
   // Show correction reason if rejected
   const correctionReason = job.status === 'rejected' ? job.notes : null;
+
+  const machineEstimate = estimateMachineTime({
+    jobType: job.job_type,
+    specification: job.specification,
+    quantity: job.quantity,
+    cutlinesIncluded: job.cutlines_included
+  });
+
+  const machineEstimateHtml = `<fieldset>
+        <legend>Machine estimate</legend>
+        <div class="machine-estimate">
+          <span>BN-20 machine time</span>
+          <strong>${escapeHtml(machineEstimate.display)}</strong>
+          <small>${escapeHtml(machineEstimate.available ? 'High Quality assumption · estimate only' : machineEstimate.reason)}</small>
+        </div>
+      </fieldset>`;
 
   return `<section class="page-heading">
       <div>
@@ -37,6 +54,7 @@ export function renderJobDetails(job, profile, userId) {
         ${job.ready_at ? `<label>Ready at<input value="${formatDateTime(job.ready_at)}" disabled></label>` : ''}
         ${job.collected_at ? `<label>Collected at<input value="${formatDateTime(job.collected_at)}" disabled></label>` : ''}
       </fieldset>
+      ${machineEstimateHtml}
       <fieldset>
         <legend>Artwork confirmation</legend>
         <label class="check"><input checked disabled type="checkbox"> Print-ready artwork confirmed</label>
