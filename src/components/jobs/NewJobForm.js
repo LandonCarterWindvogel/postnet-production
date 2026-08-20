@@ -4,6 +4,7 @@
 import { BRANCHES, MATERIALS } from '../../utils/constants.js';
 import { escapeHtml } from '../../utils/formatters.js';
 import { isProduction } from '../../utils/helpers.js';
+import { estimateMachineTime } from '../../utils/machineTimeEstimator.js';
 
 export function materialOptions(type) {
   return MATERIALS[type].map((value) => `<option>${escapeHtml(value)}</option>`).join('');
@@ -26,6 +27,13 @@ export function renderNewJobForm(profile, stockItems = []) {
   stockItems.forEach(item => {
     if (item.quantity_on_hand <= 0) stockWarnings[item.material] = 'unavailable';
     else if (item.quantity_on_hand <= item.low_stock_threshold) stockWarnings[item.material] = 'low';
+  });
+
+  const initialEstimate = estimateMachineTime({
+    jobType: 'stickers',
+    specification: '',
+    quantity: 1,
+    cutlinesIncluded: false
   });
 
   return `<section class="page-heading">
@@ -76,6 +84,7 @@ export function renderNewJobForm(profile, stockItems = []) {
             <div><dt>Quantity</dt><dd data-review="quantity">—</dd></div>
             <div><dt>Material</dt><dd data-review="material">—</dd></div>
           </dl></div>
+          <div class="review-card"><span>BN-20 machine estimate</span><strong id="machine-time-estimate">${initialEstimate.display}</strong><small id="machine-time-estimate-note">Enter the size and quantity to calculate.</small></div>
         </div>
         <div class="artwork-checklist">
           <h3>Artwork checklist</h3>
