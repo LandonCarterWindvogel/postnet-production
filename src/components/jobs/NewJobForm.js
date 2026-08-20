@@ -5,6 +5,7 @@
 import { BRANCHES, MATERIALS } from '../../utils/constants.js';
 import { escapeHtml } from '../../utils/formatters.js';
 import { isProduction } from '../../utils/helpers.js';
+import { estimateMachineTime } from '../../utils/machineTimeEstimator.js';
 
 export function materialOptions(type) {
   return MATERIALS[type].map((value) => `<option>${value}</option>`).join('');
@@ -23,6 +24,13 @@ export function renderNewJobForm(profile, stockItems = []) {
     } else if (item.quantity_on_hand <= item.low_stock_threshold) {
       stockWarnings[item.material] = 'low';
     }
+  });
+
+  const initialEstimate = estimateMachineTime({
+    jobType: 'stickers',
+    specification: '',
+    quantity: 1,
+    cutlinesIncluded: false
   });
 
   return `<section class="page-heading">
@@ -53,6 +61,11 @@ export function renderNewJobForm(profile, stockItems = []) {
         <label class="check"><input type="checkbox" name="cutlines"> Cutlines included</label>
         <p class="hint">For sticker jobs, cutlines are strongly recommended.</p>
       </fieldset>
+      <div class="machine-estimate" id="machine-time-estimate" aria-live="polite">
+        <span>BN-20 machine estimate</span>
+        <strong>${initialEstimate.display}</strong>
+        <small>High Quality assumption · estimate only</small>
+      </div>
       <p class="form-error"></p>
       <div class="form-actions"><button class="button button--primary">Submit to incoming jobs</button></div>
     </form>`;
