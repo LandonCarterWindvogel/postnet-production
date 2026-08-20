@@ -4,6 +4,7 @@ import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
 import { STATUS_LABELS } from '../../utils/constants.js';
 import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
+import { estimateMachineTime } from '../../utils/machineTimeEstimator.js';
 import { renderJobTimeline } from './JobTimeline.js';
 
 function priorityLabel(priority) {
@@ -16,6 +17,13 @@ export function renderJobDetails(job, profile, userId) {
   const canReject = isProduction(profile) && !isClosed(job) && job.status !== 'rejected';
   const canResubmit = !isProduction(profile) && job.status === 'rejected' && job.branch === profile.branch;
   const correctionReason = job.status === 'rejected' ? job.notes : null;
+
+  const machineEstimate = estimateMachineTime({
+    jobType: job.job_type,
+    specification: job.specification,
+    quantity: job.quantity,
+    cutlinesIncluded: job.cutlines_included
+  });
 
   return `<section class="page-heading page-heading--details">
     <div>
@@ -51,6 +59,13 @@ export function renderJobDetails(job, profile, userId) {
         ${job.ready_at ? `<div><dt>Ready at</dt><dd>${formatDateTime(job.ready_at)}</dd></div>` : ''}
         ${job.collected_at ? `<div><dt>Collected at</dt><dd>${formatDateTime(job.collected_at)}</dd></div>` : ''}
       </dl>
+    </article>
+    <article class="detail-card">
+      <div class="detail-card__heading"><h2>BN-20 Machine Estimate</h2><span>High Quality</span></div>
+      <div class="detail-note-list">
+        <p><strong>Estimated machine time:</strong> ${escapeHtml(machineEstimate.display)}</p>
+        <p>${escapeHtml(machineEstimate.available ? 'Estimate only — calibrate against the real BN-20.' : machineEstimate.reason)}</p>
+      </div>
     </article>
     <article class="detail-card">
       <div class="detail-card__heading"><h2>Production Notes</h2></div>
