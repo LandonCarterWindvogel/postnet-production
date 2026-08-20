@@ -4,6 +4,7 @@
 import { MATERIALS } from '../utils/constants.js';
 import { validateJobForm } from '../utils/validators.js';
 import { isProduction, isOverdue } from '../utils/helpers.js';
+import { estimateMachineTime } from '../utils/machineTimeEstimator.js';
 import { renderAppShell } from '../components/layout/AppShell.js';
 import { renderLoginView } from '../components/auth/LoginView.js';
 import { renderToasts } from '../components/layout/Toasts.js';
@@ -92,6 +93,24 @@ function render() {
   }) + renderToasts(ui.toasts);
 }
 
+function updateMachineEstimate(form) {
+  const output = form?.querySelector('#machine-time-estimate');
+  if (!output) return;
+
+  const estimate = estimateMachineTime({
+    jobType: form.elements.type?.value || 'stickers',
+    specification: form.elements.specification?.value || '',
+    quantity: form.elements.quantity?.value || 1,
+    cutlinesIncluded: Boolean(form.elements.cutlines?.checked)
+  });
+
+  const assumption = estimate.available
+    ? 'High Quality assumption · estimate only'
+    : estimate.reason;
+
+  output.innerHTML = `<span>BN-20 machine estimate</span><strong>${estimate.display}</strong><small>${assumption}</small>`;
+}
+
 function bindEvents() {
   // -------- CLICK events --------
   appEl.addEventListener('click', async (event) => {
@@ -149,6 +168,12 @@ function bindEvents() {
     // Confirm rush/urgent (we'll add a button in JobDetails later; for now, just a placeholder)
   });
 
+  // -------- INPUT events (live machine estimate) --------
+  appEl.addEventListener('input', (event) => {
+    const form = event.target.closest('#job-form');
+    if (form) updateMachineEstimate(form);
+  });
+
   // -------- CHANGE events (job type → material; search/filters) --------
   appEl.addEventListener('change', (event) => {
     if (event.target.id === 'job-type') {
@@ -159,6 +184,9 @@ function bindEvents() {
           .join('');
       }
     }
+
+    const jobForm = event.target.closest('#job-form');
+    if (jobForm) updateMachineEstimate(jobForm);
 
     // Search/filter updates – we'll read from the board's inputs
     const searchInput = document.getElementById('search-input');
