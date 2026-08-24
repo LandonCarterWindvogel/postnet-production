@@ -5,13 +5,10 @@
 const FIELD_MESSAGES = {
   customer: 'Enter the customer name.',
   emailReference: 'Enter the email subject or reference.',
-  specification: 'Enter a size or placement.',
+  widthMm: 'Enter the width in millimetres.',
+  heightMm: 'Enter the height in millimetres.',
   quantity: 'Enter a quantity of at least 1.'
 };
-
-function fieldValue(form, name) {
-  return String(form.elements[name]?.value || '').trim();
-}
 
 function showStepError(form, step, message, fieldName) {
   const error = form.querySelector(`[data-wizard-error="${step}"]`);
@@ -33,12 +30,17 @@ function clearStepError(form, step) {
   });
 }
 
+function positiveNumber(form, name) {
+  const value = Number(form.elements[name]?.value);
+  return Number.isFinite(value) && value > 0;
+}
+
 function validateStep(form, step) {
   clearStepError(form, step);
 
   if (step === 1) {
     for (const name of ['customer', 'emailReference']) {
-      if (!fieldValue(form, name)) {
+      if (!String(form.elements[name]?.value || '').trim()) {
         showStepError(form, step, FIELD_MESSAGES[name], name);
         return false;
       }
@@ -46,10 +48,11 @@ function validateStep(form, step) {
   }
 
   if (step === 2) {
-    const specification = fieldValue(form, 'specification');
-    if (!specification) {
-      showStepError(form, step, FIELD_MESSAGES.specification, 'specification');
-      return false;
+    for (const name of ['widthMm', 'heightMm']) {
+      if (!positiveNumber(form, name)) {
+        showStepError(form, step, FIELD_MESSAGES[name], name);
+        return false;
+      }
     }
 
     const quantity = Number(form.elements.quantity?.value);
