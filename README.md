@@ -1,6 +1,6 @@
 # PostNet Production
 
-PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history, correction/resubmission workflow, and role-based branch access.
+PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history, correction/resubmission workflow, role-based branch access, and machine-time estimates for the BN-20 production portion.
 
 ## 1. Current scope
 
@@ -24,17 +24,33 @@ The Production Centre can see and manage all branches. Branch users are restrict
 
 ### Stickers
 
+Internal workflow:
+
 `Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`
 
 Internal database status for the sticker Cutting stage is `contour_cutting`.
 
 ### T-shirt Flex
 
+Internal workflow:
+
 `Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`
 
 Internal database status for Flex Cutting is `cutting`.
 
 The Production Board intentionally presents both internal cutting statuses as one visual **Cutting** stage. Do not create a second visual Cutting column unless the underlying workflow is intentionally changed.
+
+### Simplified production controls
+
+Operators do **not** need to click every internal stage manually.
+
+The main production actions are:
+
+- **Start Production** — moves `Incoming`/`Queued` through the queue and into the first machine stage (`Printing` for stickers, `Cutting` for Flex).
+- **Mark Ready** — advances the job through its remaining internal production stages to `Ready` in one operator action.
+- **Mark Collected / Sent** — closes a `Ready` job as `Collected`.
+
+The detailed internal statuses remain in the database for audit history, reporting, queue-derived machine state, and future automation. The simplified actions only reduce the number of manual clicks; they do not remove the underlying workflow.
 
 ### Returned for correction
 
@@ -46,7 +62,56 @@ The owning branch is responsible for correcting the artwork and resubmitting the
 
 This is a separate correction loop, not a backwards production transition. The database trigger is the final authority for allowed status changes.
 
-## 3. Priorities and queue ordering
+## 3. Machine-time estimator
+
+The New Job wizard captures **width, height and quantity** for both stickers and T-shirt Flex.
+
+The application calculates an **Estimated Machine Time** from the supplied production baselines. This estimate represents only the machine portion:
+
+> **Print + cut only**
+
+It explicitly excludes:
+
+- queue waiting time
+- design time
+- sticker drying
+- weeding
+- heat pressing
+- quality control
+- collection/courier/driver time
+
+Current baseline anchors are maintained in `src/utils/machineTime.js` and come from observed production timings supplied for the client demo:
+
+### Stickers / Decals
+
+| Size | Quantity | Baseline |
+|---|---:|---:|
+| 50×50 mm | 100 | 35–40 min |
+| 50×50 mm | 500 | ~3 h |
+| 100×50 mm | 100 | 45–55 min |
+| 100×50 mm | 500 | ~4.5 h |
+| 200×100 mm | 100 | ~2.5 h |
+
+### Flex / HTV
+
+| Size | Quantity | Baseline |
+|---|---:|---:|
+| 100×100 mm | 10 | 15–20 min |
+| 200×200 mm | 10 | 45–60 min |
+| 200×200 mm | 25 | ~2 h |
+| 300×300 mm | 25 | 3.5–4 h |
+
+The estimator uses these anchors to produce a practical estimate for sizes and quantities between the supplied examples. It is an **estimate**, not a promise of completion time.
+
+### VersaWorks job-log data
+
+A historical `Job Log.csv` export was supplied from the BN-20/VersaWorks workflow. It contains thousands of production records, including `Print Start Time`, `Print End Time`, dimensions, copy counts, media names and ink consumption. This data is valuable for improving the estimator later because real machine durations can be compared against the current baseline anchors.
+
+When the log is cleaned and normalized, the safest machine-duration definition for future calibration is `Print Start Time → Print End Time`.
+
+Do not replace the current client-approved baselines with raw CSV-derived averages until the log has been validated and the job types/media have been separated correctly.
+
+## 4. Priorities and queue ordering
 
 Use these labels everywhere:
 
@@ -60,7 +125,7 @@ Production Board ordering is:
 
 Within the same priority, jobs remain FIFO by creation time.
 
-## 4. New Job wizard rules
+## 5. New Job wizard rules
 
 The New Job page has three steps:
 
@@ -68,16 +133,19 @@ The New Job page has three steps:
 2. **Sizes & Materials**
 3. **Review & Submit**
 
-A user may not proceed from Step 2 unless:
+Step 2 requires:
 
-- size/placement is present
-- quantity is a whole number of at least 1
+- width in millimetres greater than 0
+- height in millimetres greater than 0
+- quantity as a whole number of at least 1
+
+The application generates the human-readable specification automatically as `Width × Height mm`.
 
 Step 3 requires the artwork checklist before the job is inserted.
 
 The browser's native hidden-control validation must not be relied upon because hidden wizard panels can cause Chrome's `invalid form control ... is not focusable` error. Application-side validation is the source of the user-facing wizard errors, while Supabase constraints remain the server-side backstop.
 
-## 5. Stock
+## 6. Stock
 
 **All stock is measured in kilograms (kg).**
 
@@ -91,11 +159,25 @@ Materials:
 - Gold Flex — kg
 - Silver Flex — kg
 
-Stock is manually adjusted by Production. The application does not guess material consumption because jobs do not currently store a reliable usage-per-job rate.
+Stock is manually adjusted by Production. The application currently does **not** automatically deduct material from jobs because reliable usage-per-job rules for every material have not been finalized.
+
+### Confirmed Orajet stock baseline
+
+For **Orajet 3164M and 3164G**:
+
+- density including liner: **135 g/m²**
+- roll width: **460 mm**
+- weight per linear metre: **0.46 × 135 = 62.1 g/m**
+- weight per metre: **0.0621 kg/m**
+- 1 kg: approximately **16.10 m**
+- 10 kg: approximately **161.0 m**
+- 20 kg: approximately **322.1 m**
+
+These values are appropriate as a known stock reference. Do not assume the same grams-per-metre value for Flex or other media without confirming its own material specification.
 
 Do not silently reinterpret numeric stock quantities when changing units. Unit migrations change the stored unit label; review the displayed stock values after deployment.
 
-## 6. Roles and security model
+## 7. Roles and security model
 
 The database roles are:
 
@@ -119,7 +201,7 @@ This logic is captured in:
 
 Do not remove the protection just to make testing easier.
 
-## 7. Realtime and machine status
+## 8. Realtime and machine status
 
 Supabase Realtime is used for live job updates.
 
@@ -130,7 +212,7 @@ The Netlify configuration must allow:
 - Supabase HTTPS
 - Supabase secure Realtime WebSocket (`wss:`)
 
-## 8. UI direction
+## 9. UI direction
 
 The application uses the approved PostNet Copy & Print visual direction:
 
@@ -142,6 +224,7 @@ The application uses the approved PostNet Copy & Print visual direction:
 - Dense Production Board table with pagination
 - Clear progress indicators
 - Guided New Job wizard
+- Machine-time estimate card in New Job
 - Compact Job Details and Timeline
 - Stock and Settings screens optimized for quick production use
 
@@ -160,7 +243,7 @@ Use high-resolution artwork with a transparent background and no white rectangul
 
 The application references the files by public URL; do not convert the artwork into large Base64 strings in JavaScript.
 
-## 9. Repository architecture
+## 10. Repository architecture
 
 ```text
 src/
@@ -168,7 +251,7 @@ src/
 ├── components/          # UI rendering components
 ├── services/            # Supabase API access
 ├── stores/              # client-side state + realtime subscriptions
-├── utils/               # constants, helpers, validation and formatting
+├── utils/               # constants, machine-time model, helpers, validation and formatting
 ├── styles.css           # shared/base styles
 ├── postnet-ui.css       # branded application UI
 └── postnet-board.css    # Production Board layout
@@ -183,7 +266,7 @@ supabase/migrations/     # ordered database history
 
 Keep the separation of responsibilities. Components should render UI, stores should coordinate client state, and services should contain Supabase calls.
 
-## 10. Development
+## 11. Development
 
 ```powershell
 npm install
@@ -203,7 +286,7 @@ Before merging any production change:
 5. Check the browser console for errors.
 6. Keep `main` untouched until the branch is verified.
 
-## 11. Supabase migrations and database upkeep
+## 12. Supabase migrations and database upkeep
 
 Migrations are ordered by filename and should be applied once, in order, when setting up a new database.
 
@@ -225,28 +308,29 @@ For a live environment, apply only migrations that are newer than the last succe
 
 If a production fix was made directly in Supabase SQL Editor, create or update a migration that records the same final state before the change is considered complete. Otherwise a future database rebuild can silently lose the fix.
 
-## 12. Testing matrix before merge
+## 13. Testing matrix before merge
 
 ### New Job
 
 - Step 1 blocks missing customer/reference.
-- Step 2 blocks missing size/placement.
+- Step 2 blocks missing width.
+- Step 2 blocks missing height.
 - Step 2 blocks missing/invalid quantity.
+- Machine-time estimate updates from size + quantity.
+- Estimate is explicitly labelled Print + Cut machine time only.
 - Step 3 blocks missing artwork confirmations.
 - Valid sticker job submits.
 - Valid Flex job submits.
 
-### Production workflow
+### Simplified production controls
 
-Sticker:
-
-`Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`
-
-Flex:
-
-`Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`
-
-Verify Flex never enters Printing/Drying and there is only one visual Cutting stage.
+- Production sees **Start Production** for `Incoming`/`Queued`.
+- Sticker Start Production reaches `Printing` internally.
+- Flex Start Production reaches `Cutting` internally.
+- Production sees **Mark Ready** during active production.
+- Mark Ready reaches `Ready` while preserving internal event history.
+- Production sees **Mark Collected / Sent** at `Ready`.
+- No requirement to manually click every internal stage.
 
 ### Correction loop
 
@@ -279,7 +363,7 @@ Verify every material displays `kg` and stock changes are persisted/realtime.
 
 Verify a branch user cannot change their own role or branch through the application.
 
-## 13. Deployment
+## 14. Deployment
 
 Netlify runs `npm run build` and publishes `dist`.
 
@@ -292,7 +376,7 @@ VITE_SUPABASE_ANON_KEY
 
 Never commit service-role keys or other Supabase secrets to the repository.
 
-## 14. Safe release procedure
+## 15. Safe release procedure
 
 ```powershell
 git checkout main
@@ -315,7 +399,7 @@ git status
 
 The expected final state is a clean working tree and `main` synchronized with `origin/main`.
 
-## 15. Upkeep rules for future developers and AI agents
+## 16. Upkeep rules for future developers and AI agents
 
 Before changing code:
 
@@ -329,6 +413,13 @@ When changing a workflow:
 - Update both the UI logic and database transition enforcement.
 - Add/update migrations for database changes.
 - Update the testing matrix in this README.
+- Keep the simplified operator actions understandable even when the underlying statuses remain detailed.
+
+When changing the machine-time estimator:
+
+- Keep the estimate explicitly limited to the machine portion unless the business requirement changes.
+- Update `src/utils/machineTime.js` when the client supplies new baseline timings.
+- Do not replace approved baselines with raw historical averages until historical job logs have been cleaned, classified and validated.
 
 When changing roles/RLS:
 
@@ -350,14 +441,15 @@ When changing database logic:
 - Never silently reset live production quantities or jobs.
 - Record manual production fixes in a migration before release.
 
-## 16. Current release state
+## 17. Current release state
 
-The current UI redesign is developed on the `ui/postnet-copy-print` branch while `main` remains the known-good production branch.
+The current UI redesign and workflow improvements are developed on the `ui/postnet-copy-print` branch while `main` remains the known-good production branch.
 
 Do not merge the redesign branch until:
 
 - the final brand artwork is supplied
-- the full browser test matrix passes
+- the New Job estimator has been browser-tested for stickers and Flex
+- the simplified production actions have been browser-tested
 - the four-store visibility tests pass
 - the correction/resubmission loop passes
 - the Realtime tests pass
