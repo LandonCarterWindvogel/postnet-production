@@ -1,117 +1,490 @@
 # PostNet Production
 
-PostNet Production is a progressive web app for managing sticker and T‑shirt flex work from intake through to collection. It deliberately records email artwork references instead of storing artwork files.
+PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history, correction/resubmission workflow, role-based branch access, and a machine-time estimator.
 
-## Sprints
+## 1. Current scope
 
-### Sprint 1 — Foundation
+Keep the product intentionally focused. It is a production workflow tool, not a CRM or ERP.
 
-Vite PWA shell, responsive Production Board, login flow, secure Supabase schema, and job‑intake interface. Job persistence, live queue updates, stock, and notifications delivered in later sprints.
+Supported job types:
 
-### Sprint 2 — Real jobs
+- **Stickers** — Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision
+- **T-shirt Flex** — White Flex, Gold Flex, Silver Flex
 
-Jobs are created and persisted in Supabase. Branches submit into Incoming, Production accepts into Queued, and each job moves through its type‑specific workflow (stickers or T‑shirt flex) to Ready and Collected.
+Supported stores:
 
-### Sprint 3 — Architecture
+- Plettenberg Bay
+- Knysna
+- Waterside
+- Sedgefield
 
-`src/main.js` became a two‑line entry point; the app is split into `app/`, `stores/`, `components/`, and `utils/`. No behavior changed.
+The Production Centre can see and manage all branches. Branch users are restricted by database RLS to their own branch.
 
-### Sprint 4 — Workflow fixes + Realtime
+## 2. User-facing production workflow
 
-- **Return for correction** added: Production can send any active job back to the branch with a reason.
-- **My Jobs** now filters correctly: branch users see their branch’s history; production sees jobs they personally accepted.
-- **Realtime** updates the board and My Jobs live via Supabase Realtime.
+The user-facing workflow is intentionally simple so stores and operators do not have to click every machine stage.
 
-### Sprint 5 — Stock
+```text
+Submitted / Incoming → In Production → Ready → Collected / Sent
+```
 
-Materials table (`stock_items`) seeded with all options from the New Job form. Everyone can view; production can update. Low‑stock flag when quantity ≤ threshold. Realtime updates.
+### Production actions
 
-**Correction:** sticker materials are tracked by **weight (kg)**, not length. Flex materials remain in `sheets`.
+- **Start Production** — accepts an incoming job and moves it into the first machine stage.
+- **Mark Ready** — advances the job through the remaining internal production states and records the final `ready` event.
+- **Mark Collected / Sent** — closes a ready job as `collected`.
 
-### Sprint 6 — Settings / staff management
+The detailed internal states are still stored for auditing, timelines, machine context and future reporting.
 
-Production users can edit any profile’s name, branch, and role directly from the Settings page. Branch users see a read‑only card of their own profile. No invite flow – new logins still created in Supabase Auth → Users.
+### Internal sticker workflow
 
-### Sprint 7 — Notifications + QA
+`Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`
 
-In‑app toasts for relevant events (new job for production; ready/returned for branch). Fixed mobile nav, self‑promotion RLS loophole, job creation status validation, escaped user‑derived values, and updated documentation.
+Internal database status for the sticker Cutting stage is `contour_cutting`.
 
-### Sprint 8 — Workflow enforcement & job events
+### Internal T-shirt Flex workflow
 
-### Sprint 9 — Production board and machine-status fixes (current)
+`Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`
 
-- **Shared Cutting stage** – the Production Board now displays one Cutting column for both sticker contour cutting and T-shirt Flex cutting. The database still keeps `contour_cutting` and `cutting` as separate internal statuses.
-- **Correct Flex progression** – workflow calculations now use internal status keys instead of display labels, preventing the shared Cutting label from accidentally sending a Flex job down the sticker path. Flex remains `Incoming → Queued → Cutting → Weeding → Heat Press → Quality Check → Ready → Collected`.
-- **Sticker progression preserved** – sticker jobs remain `Incoming → Queued → Printing → Drying → Cutting → Weeding → Quality Check → Ready → Collected`, with `contour_cutting` retained internally.
-- **Focused board** – production-only stages are shown when relevant to the active jobs, reducing empty columns without changing the underlying workflow.
-- **Machine status** – the Roland BN-20 card now shows queue-derived Printing/Cutting/Ready state. Maintenance remains a manual override. This is production-queue state, not direct machine telemetry; the app does not have a VersaWorks/BN-20 hardware API connection.
-- **Netlify Realtime CSP** – the Content Security Policy explicitly permits Supabase HTTPS API traffic and secure WebSocket Realtime connections (`wss://*.supabase.co`).
+Internal database status for Flex Cutting is `cutting`.
 
-### Sprint 8 — Workflow enforcement & job events (previous)
+The Production Board intentionally presents the detailed machine states as one user-facing **In Production** phase. Sticker and Flex cutting remain separate internal database states but share one visual Cutting context.
 
-- **Database‑enforced workflow transitions** – status can only move forward according to the correct workflow for the job type.
-- **Material compatibility** – sticker jobs can only use sticker materials; flex jobs only flex materials.
-- **Branch resubmission** – branch users can resubmit a rejected job after correction (back to Incoming).
-- **Job events & timeline** – every status change, creation, return, resubmission, and rush confirmation is recorded in `job_events` and displayed as a timeline on the job detail page.
-- **24–48 hour standard** – normal jobs get an `expected_ready_by` of 48 hours from creation. Rush/urgent jobs require production confirmation before an expected date is set.
-- **Rush/urgent confirmation** – production must explicitly confirm rush/urgent jobs; the UI shows a confirmation button.
-- **Search and filters** on the Production Board (by job number, customer, branch, email, material; and filters for branch, priority, status, type, material).
-- **Branch Dashboard** – branch users see counts and recent jobs.
-- **Stock warnings** on the New Job form – warns if material is low or unavailable.
-- **Production summary** – counts of overdue, urgent, returned, and ready jobs on the board.
+### Returned for correction
 
-### Sprint 9 — Architecture cleanup (optional future)
+Any active job may be returned by Production for correction:
 
-Event handlers split into modules for maintainability.
+`Active → Rejected → Incoming → Queued → ...`
 
-## Run locally
+The owning branch is responsible for correcting the artwork and resubmitting the job to `Incoming`. Production then starts it again.
 
-1. Copy `.env.example` to `.env`.
-2. Enter your Supabase Project URL and anon/publishable key.
-3. Run `npm install` and then `npm run dev`.
-4. Apply the migrations in order (see below) in the Supabase SQL Editor before creating users. Then follow the database setup notes to create the first production user.
+This is a separate correction loop, not a backwards production transition. The database trigger is the final authority for allowed status changes.
 
-## Supabase Migrations (order)
+## 3. Production Board overview
 
-Apply these in the Supabase SQL Editor in **exact** order:
+The top summary is aligned with the simplified workflow:
 
-1. `202607270001_initial_schema.sql`
-2. `202607270002_production_job_submission.sql`
-3. `202608020001_realtime_jobs.sql`
-4. `202608020002_stock_tracking.sql`
-5. `202608020003_staff_management.sql`
-6. `202608020004_qa_rls_hardening.sql`
-7. `202608020005_fix_profiles_recursion.sql`
-8. `202608020006_stock_unit_kg.sql`
-9. `202608020007_add_cutting_status.sql`
-10. `202608020008_machine_status.sql`
-11. `202608020009_workflow_enforcement.sql`
-12. `202608020010_sla_fields.sql`
-13. `202608020011_job_events.sql`
+- **All** — all active jobs, excluding collected and rejected jobs.
+- **Incoming** — submitted jobs waiting for Production to start.
+- **In Production** — queued jobs plus all internal machine/production states.
+- **Ready** — jobs completed and waiting for collection/sent handover.
 
-All migrations are idempotent where possible and preserve existing data.
+Secondary alerts show **Urgent** and **Returned for Correction** counts.
 
-## Deployment
+The board also has permanent **Store Views** for all four branches plus **All Branches**. A store with zero jobs remains selectable and displays an empty state rather than disappearing from the UI.
 
-Netlify is configured to build with `npm run build` and publish `dist`. Add the same two `VITE_SUPABASE_*` variables in the Netlify site settings.
+The detailed internal state remains available in the table as supporting context, but the primary status shown to users is `Incoming`, `In Production`, `Ready`, or `Returned for Correction`.
 
-## Product scope
+## 4. Priorities and queue ordering
 
-- **Sticker materials**: Gloss Vinyl, Matte Vinyl, Clear Vinyl, Contravision (all in kg)
-- **T‑shirt flex**: White Flex, Gold Flex, Silver Flex (all in sheets)
-- **Branches**: Plettenberg Bay, Knysna, Waterside, Sedgefield
-- **Artwork source**: email references to PDF and CDR files only; never uploads
-- **Standard turnaround**: 24–48 hours for normal jobs. Rush/Urgent require production centre confirmation.
-- **Workflows**:
-  - Stickers: Incoming → Queued → Printing → Drying → Cutting (internal `contour_cutting`) → Weeding → Quality Check → Ready → Collected
-  - Flex: Incoming → Queued → Cutting (internal `cutting`) → Weeding → Heat Press → Quality Check → Ready → Collected
-  - The board visually combines the two cutting statuses into one Cutting stage; the internal statuses remain distinct for workflow enforcement and history.
-- **Correction**: Active job → Rejected (with reason) → Branch corrects → Resubmitted → Incoming
+Use these labels everywhere:
 
-## Security
+- **Standard**
+- **Rush**
+- **Urgent**
 
-- Row Level Security (RLS) is enforced on all tables.
-- Only production users can promote or change roles/branches.
-- Workflow transitions are enforced at the database level – the UI is not the security boundary.
-- Material compatibility is checked on insert/update.
-- The `service_role` key is never used in the frontend.
+Production Board ordering is:
+
+`Urgent → Rush → Standard`
+
+Within the same priority, jobs remain FIFO by creation time.
+
+## 5. New Job wizard rules
+
+The New Job page has three steps:
+
+1. **Job Information**
+2. **Sizes & Materials**
+3. **Review & Submit**
+
+A user may not proceed from Step 2 unless:
+
+- width is present and greater than 0
+- height is present and greater than 0
+- quantity is a whole number of at least 1
+
+Step 3 requires the artwork checklist before the job is inserted.
+
+Application-side validation is the source of the user-facing wizard errors. Do not rely on hidden wizard panels plus native browser validation because Chrome can produce `invalid form control ... is not focusable` when the invalid control is inside a hidden panel.
+
+## 6. Machine-time estimator
+
+The estimator describes **machine production time only: Print + Cut**.
+
+It deliberately excludes:
+
+- design time
+- drying
+- weeding
+- heat pressing
+- quality control
+- queue/waiting time
+- collection/courier time
+
+### Current observed anchors
+
+Sticker jobs:
+
+| Size | Quantity | Estimate |
+|---|---:|---:|
+| 50×50 mm | 100 | ~35–40 min |
+| 50×50 mm | 500 | ~3 h |
+| 100×50 mm | 100 | ~45–55 min |
+| 100×50 mm | 500 | ~4.5 h |
+| 200×100 mm | 100 | ~2.5 h |
+
+T-shirt Flex:
+
+| Size | Quantity | Estimate |
+|---|---:|---:|
+| 100×100 mm | 10 | ~15–20 min |
+| 200×200 mm | 10 | ~45–60 min |
+| 200×200 mm | 25 | ~2 h |
+| 300×300 mm | 25 | ~3.5–4 h |
+
+The application uses the midpoint of the supplied ranges as model anchors and interpolates for other valid sizes/quantities. The estimate is a machine-time estimate, not a promise of total customer completion time.
+
+The estimator code lives in:
+
+`src/utils/machineTime.js`
+
+A historical VersaWorks/BN-20 CSV export is available for future model validation. It contains real print start/end timestamps, sizes and copy counts. Clean malformed rows before using the export for automated statistical fitting.
+
+## 7. Stock
+
+**All stock is measured in kilograms (kg).**
+
+Materials:
+
+- Gloss Vinyl — kg
+- Matte Vinyl — kg
+- Clear Vinyl — kg
+- Contravision — kg
+- White Flex — kg
+- Gold Flex — kg
+- Silver Flex — kg
+
+Known Orajet baseline for 3164M/3164G:
+
+- Roll width: **460 mm**
+- Material weight: **135 g/m² including liner**
+- 1 linear metre at 460 mm: **62.1 g = 0.0621 kg**
+- 1 kg: **about 16.1 linear metres**
+
+Stock is currently manually adjusted by Production. Automatic job-level material deduction is intentionally not enabled until reliable per-material consumption rules are established.
+
+Do not silently reinterpret numeric stock quantities when changing units. Unit migrations change the stored unit label; review displayed values after deployment.
+
+## 8. Roles and security model
+
+The database roles are:
+
+- `production`
+- `branch_admin`
+- `branch_user`
+
+A normal branch user must **never** be able to promote themselves to Production or change their branch.
+
+Role/branch changes are controlled by Production staff and the administrative Supabase SQL path. The application UI is not a security boundary; PostgreSQL RLS and triggers are.
+
+### Profile self-escalation protection
+
+`public.prevent_self_privilege_escalation()` prevents authenticated non-production users from changing their own `role` or `branch`.
+
+Administrative SQL Editor sessions do not have `auth.uid()`, so the trigger permits explicit admin maintenance in that context.
+
+This logic is captured in:
+
+`supabase/migrations/202608170002_fix_profile_privilege_admin_updates.sql`
+
+Do not remove this protection just to make testing easier.
+
+## 9. Realtime and machine status
+
+Supabase Realtime is used for live job updates, stock changes and other subscribed state.
+
+The frontend's machine status is queue-derived/manual application state, not direct VersaWorks or Roland hardware telemetry. Do not describe it as live machine telemetry unless a real hardware integration is added.
+
+Netlify must allow:
+
+- Supabase HTTPS
+- Supabase secure Realtime WebSocket (`wss:`)
+
+## 10. UI direction and assets
+
+The application uses the approved PostNet Copy & Print visual direction:
+
+- PostNet red, purple, navy and white
+- Dark branded sidebar
+- PostNet Copy & Print brand mark from `public/postnet-copy-print-mark.webp`
+- Roland machine mark from `public/roland-machine-mark.webp`
+- Four-card production overview: All / Incoming / In Production / Ready
+- Secondary Urgent / Returned for Correction alerts
+- Permanent Store Views for All Branches and all four stores
+- Dense Production Board table with pagination
+- Clear progress indicators and simplified operator actions
+- Guided New Job wizard with live machine-time estimate
+- Compact Job Details and Timeline
+- Stock and Settings screens optimized for quick production use
+
+Brand assets are intentionally kept in `public/` so they are normal static files, cacheable by the browser and easy to replace without changing application code.
+
+### Updating the artwork
+
+Replace these files while keeping the filenames unchanged:
+
+```text
+public/postnet-copy-print-mark.webp
+public/roland-machine-mark.webp
+```
+
+Use high-resolution artwork with a transparent background and no white rectangular canvas. After replacing the files, run the normal build/test commands and commit the asset changes.
+
+Do not convert the artwork into large Base64 strings in JavaScript. Public static files are the supported approach.
+
+## 11. Repository architecture
+
+```text
+src/
+├── app/                 # app bootstrap, state and router
+├── components/          # UI rendering components
+├── services/            # Supabase API access
+├── stores/              # client-side state + realtime subscriptions
+├── utils/               # constants, helpers, validation and formatting
+├── styles.css           # shared/base styles
+├── postnet-ui.css       # branded application UI
+└── postnet-board.css    # Production Board layout
+
+public/
+├── icon.svg
+├── postnet-copy-print-mark.webp
+└── roland-machine-mark.webp
+
+supabase/migrations/     # ordered database history
+```
+
+Keep the separation of responsibilities. Components should render UI, stores should coordinate client state, and services should contain Supabase calls.
+
+## 12. Development
+
+```powershell
+npm install
+npm run check
+npm run build
+npm run dev
+```
+
+`npm run check` is intentionally lightweight and currently checks the application entry points. **A passing check is not a substitute for `npm run build`.** Vite/Rollup parses the full application during the build.
+
+Before merging any production change:
+
+1. Run `npm run check`.
+2. Run `npm run build`.
+3. Start `npm run dev` and test the changed screens in Chrome.
+4. Exercise the affected workflow end-to-end.
+5. Check the browser console for errors.
+6. Keep `main` untouched until the branch is verified.
+
+## 13. Supabase migrations and database upkeep
+
+Migrations are ordered by filename and should be applied once, in order, when setting up a new database.
+
+Important workflow/security migrations include:
+
+- `202608020003_staff_management.sql` — production staff management policies
+- `202608020005_fix_profiles_recursion.sql` — safe `is_production()` helper and corrected profile policies
+- `202608020009_workflow_enforcement.sql` — server-side workflow enforcement and correction/resubmission rules
+- `202608170001_all_stock_units_kg.sql` — standardizes stock units to kg
+- `202608170002_fix_profile_privilege_admin_updates.sql` — preserves self-escalation protection while allowing explicit admin SQL profile maintenance
+- `202608240001_fix_rejection_transition_order.sql` — checks Production rejection before the incoming acceptance rule so an incoming job can be returned for correction
+- `202608240002_fix_job_state_array_position_cast.sql` — casts the `job_state` enum to text before `array_position()` so workflow validation works with PostgreSQL enum status values
+
+Do **not** rerun already-applied migrations against the live production database just because the files exist in the repository.
+
+For a new environment, apply the complete migration history in filename order using the project's normal Supabase migration process.
+
+For a live environment, apply only migrations newer than the last successfully applied migration.
+
+### If a live database was manually patched
+
+If a production fix was made directly in Supabase SQL Editor, create or update a migration that records the same final state before the change is considered complete. Otherwise a future database rebuild can silently lose the fix.
+
+After applying a workflow migration, verify the live trigger/function when the change affects status transitions. Prefer checking the actual function definition with:
+
+```sql
+SELECT pg_get_functiondef(
+  'public.validate_job_status_transition()'::regprocedure
+);
+```
+
+## 14. Testing matrix before merge
+
+### New Job
+
+- Step 1 blocks missing customer/reference.
+- Step 2 blocks missing/invalid width.
+- Step 2 blocks missing/invalid height.
+- Step 2 blocks missing/invalid quantity.
+- Machine-time estimate updates from size/quantity.
+- Step 3 blocks missing artwork confirmations.
+- Valid sticker job submits.
+- Valid Flex job submits.
+
+### Simplified production workflow
+
+For both job types the operator flow is:
+
+`Incoming → Start Production → In Production → Mark Ready → Ready → Mark Collected / Sent → Collected`
+
+Verify the internal statuses advance correctly behind the scenes.
+
+Verify Flex never enters Printing/Drying and sticker cutting and Flex cutting remain one visual Cutting context.
+
+### Correction loop
+
+- Production rejects a job with a reason.
+- Returned job appears in Needs Attention.
+- Owning branch can open it and see the reason.
+- Owning branch can resubmit it to Incoming.
+- Production sees it as Incoming and can start it again.
+
+### Branch visibility
+
+Test all four stores:
+
+- Plettenberg Bay
+- Knysna
+- Waterside
+- Sedgefield
+
+Branch users must not see jobs belonging to another branch.
+
+Production's **All Branches** view must remain selectable even when some stores have zero jobs. Each individual store view must also remain selectable with zero jobs.
+
+### Realtime
+
+Open two authenticated browser sessions and verify job status changes propagate without manual refresh.
+
+### Stock
+
+Verify every material displays `kg` and stock changes are persisted/realtime.
+
+### Role security
+
+Verify a branch user cannot change their own role or branch through the application.
+
+### Console/build gate
+
+Before merge:
+
+- no `ERR_INVALID_URL`
+- no `invalid form control ... is not focusable`
+- no uncaught JavaScript errors
+- no Supabase Realtime errors
+- `npm run check` passes
+- `npm run build` passes
+
+## 15. Deployment
+
+Netlify runs `npm run build` and publishes `dist`.
+
+Required frontend environment variables are configured in Netlify Site settings, not committed to Git:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+```
+
+Never commit service-role keys or other Supabase secrets to the repository.
+
+## 16. Safe release procedure
+
+```powershell
+git checkout main
+git pull
+git checkout -b fix-or-feature/name
+git add -A
+git commit -m "type: clear description"
+git push -u origin fix-or-feature/name
+```
+
+Test the branch and its Netlify preview first. Merge only after the build and functional test matrix pass.
+
+After merging:
+
+```powershell
+git checkout main
+git pull
+git status
+```
+
+The expected final state is a clean working tree and `main` synchronized with `origin/main`.
+
+## 17. Upkeep rules for future developers and AI agents
+
+Before changing code:
+
+- Read this README.
+- Check the current branch and `git status`.
+- Read the relevant workflow/config/database code before editing it.
+- Ask for clarification instead of inventing a business rule that is not documented.
+
+When changing a workflow:
+
+- Update both the UI logic and database transition enforcement.
+- Preserve the simplified operator actions unless the business explicitly requests more manual stages.
+- Add/update migrations for database changes.
+- Update the testing matrix in this README.
+- Test both sticker and Flex transitions separately because their internal machine workflows differ.
+- Do not change database trigger ordering casually: `incoming → rejected` must be handled before the `incoming → queued` acceptance rule.
+- Keep enum values cast to text before using them with `text[]` functions such as `array_position()`.
+
+When changing roles/RLS:
+
+- Treat Supabase RLS as the security boundary.
+- Never trust a client-side role check alone.
+- Do not add self-service privilege escalation.
+- Test both allowed and denied cases.
+
+When changing UI:
+
+- Preserve the PostNet Copy & Print visual system.
+- Keep the Production Board compact so normal desktop use does not require excessive scrolling.
+- Keep branding assets in `public/`.
+- Avoid large embedded Base64 images.
+
+When changing database logic:
+
+- Prefer idempotent migrations (`create or replace`, `drop ... if exists` where appropriate).
+- Never silently reset live production quantities or jobs.
+- Record manual production fixes in a migration before release.
+- Verify the live function/trigger after applying workflow-related migrations.
+
+## 18. Current release state
+
+The current UI redesign is developed on the `ui/postnet-copy-print` branch while `main` remains the known-good production branch.
+
+The current branch has passed the client-requested workflow tests through the final console-error sweep, including:
+
+- New Job size validation
+- Sticker and Flex machine-time estimates
+- Start Production
+- Sticker internal workflow
+- Flex internal workflow
+- Production rejection
+- Needs Attention / correction reason
+- Branch resubmission
+- Re-entry into Incoming
+- Realtime propagation
+- Four-store views and branch isolation
+- Store filtering including zero-job stores
+- Stock display in kg
+- Role/self-escalation protection
+- Browser console error sweep
+
+Before merge, still require:
+
+- the final `npm run check` result
+- the final `npm run build` result
+- confirmation that the live Supabase migration set matches the repository
+- PR review of the complete diff

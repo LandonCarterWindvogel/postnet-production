@@ -12,42 +12,26 @@ function notify() {
   listeners.forEach((listener) => listener(state));
 }
 
-// --- Job events -----------------------------------------------------------
 const jobEventListeners = new Set();
-
 export function subscribeJobEvents(listener) {
   jobEventListeners.add(listener);
   return () => jobEventListeners.delete(listener);
 }
 
-function emitJobEvent(event) {
-  jobEventListeners.forEach((listener) => listener(event));
-}
-
-// --- Realtime connection state -------------------------------------------
 let channel = null;
 let connectionStatus = 'disconnected';
 const connectionListeners = new Set();
-
 function setConnectionStatus(status) {
   connectionStatus = status;
   connectionListeners.forEach((listener) => listener(connectionStatus));
 }
-
-export function getConnectionStatus() {
-  return connectionStatus;
-}
-
-export function subscribeConnection(listener) {
-  connectionListeners.add(listener);
-  return () => connectionListeners.delete(listener);
-}
+export function getConnectionStatus() { return connectionStatus; }
+export function subscribeConnection(listener) { connectionListeners.add(listener); return () => connectionListeners.delete(listener); }
 
 export function startRealtime() {
   if (!supabase || channel) return;
   setConnectionStatus('connecting');
-  channel = supabase
-    .channel('jobs-changes')
+  channel = supabase.channel('jobs-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, handleRealtimeChange)
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') setConnectionStatus('connected');
@@ -69,9 +53,7 @@ function handleRealtimeChange(payload) {
     if (!exists) {
       state.jobs = [payload.new, ...state.jobs];
       if (payload.new.status === 'incoming') emitJobEvent({ type: 'incoming', job: payload.new });
-      if (payload.new.priority === 'rush' || payload.new.priority === 'urgent') {
-        emitJobEvent({ type: 'rush_submitted', job: payload.new });
-      }
+      if (payload.new.priority === 'rush' || payload.new.priority === 'urgent') emitJobEvent({ type: 'rush_submitted', job: payload.new });
     }
   } else if (payload.eventType === 'UPDATE') {
     const previous = state.jobs.find((job) => job.id === payload.new.id);
@@ -79,9 +61,7 @@ function handleRealtimeChange(payload) {
     if (previous && previous.status !== payload.new.status) {
       if (payload.new.status === 'ready') emitJobEvent({ type: 'ready', job: payload.new });
       if (payload.new.status === 'rejected') emitJobEvent({ type: 'rejected', job: payload.new });
-      if (previous.status === 'rejected' && payload.new.status === 'incoming') {
-        emitJobEvent({ type: 'resubmitted', job: payload.new });
-      }
+      if (previous.status === 'rejected' && payload.new.status === 'incoming') emitJobEvent({ type: 'resubmitted', job: payload.new });
     }
   } else if (payload.eventType === 'DELETE') {
     state.jobs = state.jobs.filter((job) => job.id !== payload.old.id);
@@ -89,14 +69,24 @@ function handleRealtimeChange(payload) {
   notify();
 }
 
-export function getJobState() {
-  return state;
+function firstProductionStatus(job) {
+  return job.job_type === 'flex' ? 'cutting' : 'printing';
 }
 
-export function subscribeJobs(listener) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+function isMachineStatus(status) {
+  return ['printing', 'drying', 'cutting', 'contour_cutting', 'weeding', 'heat_press', 'quality_check'].includes(status);
 }
+
+async function saveStatus(job, nextStatus, userId = null) {
+  const acceptedBy = job.status === 'incoming' ? userId : null;
+  const saved = await setJobStatus(job.id, nextStatus, acceptedBy);
+  state.jobs = state.jobs.map((item) => (item.id === saved.id ? saved : item));
+  notify();
+  return saved;
+}
+
+export function getJobState() { return state; }
+export function subscribeJobs(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 
 export async function refreshJobs() {
   try {
@@ -116,15 +106,32 @@ export async function createJob(payload) {
   return job;
 }
 
+// A single production button now performs the logical step for the operator:
+// incoming/queued -> machine start, active production -> ready, ready -> collected.
+// The detailed database states remain intact for auditing and reporting.
 export async function advanceJob(job, userId) {
-  const nextStatus = computeNextStatus(job);
-  if (!nextStatus) return job;
+  if (!job) return job;
 
-  const acceptedBy = job.status === 'incoming' ? userId : null;
-  const saved = await setJobStatus(job.id, nextStatus, acceptedBy);
-  state.jobs = state.jobs.map((item) => (item.id === saved.id ? saved : item));
-  notify();
-  return saved;
+  if (job.status === 'incoming' || job.status === 'queued') {
+    let current = job;
+    if (current.status === 'incoming') current = await saveStatus(current, 'queued', userId);
+    current = await saveStatus(current, firstProductionStatus(current), userId);
+    return current;
+  }
+
+  if (isMachineStatus(job.status)) {
+    let current = job;
+    const safetyLimit = 10;
+    for (let i = 0; i < safetyLimit && isMachineStatus(current.status); i += 1) {
+      const nextStatus = computeNextStatus(current);
+      if (!nextStatus) break;
+      current = await saveStatus(current, nextStatus, userId);
+    }
+    return current;
+  }
+
+  if (job.status === 'ready') return saveStatus(job, 'collected', userId);
+  return job;
 }
 
 export async function rejectJob(job, reason) {
@@ -146,19 +153,11 @@ export async function resubmitJob(job) {
 export async function fetchJobEvents(jobId) {
   const events = await getJobEvents(jobId);
   const job = state.jobs.find(j => j.id === jobId);
-  if (job) {
-    job.events = events;
-  }
+  if (job) job.events = events;
   return events;
 }
 
-export function setJobsError(message) {
-  state.error = message;
-  notify();
-}
+export function setJobsError(message) { state.error = message; notify(); }
+export function clearJobs() { state.jobs = []; state.error = ''; notify(); }
 
-export function clearJobs() {
-  state.jobs = [];
-  state.error = '';
-  notify();
-}
+function emitJobEvent(event) { jobEventListeners.forEach((listener) => listener(event)); }
