@@ -47,7 +47,4 @@ export function installMachineEstimatorUi() {
     const form = event.target.closest('#job-form');
     if (form) renderEstimate(form);
   });
-
-  const observer = new MutationObserver(() => renderEstimate(document.getElementById('job-form')));
-  observer.observe(document.body, { childList: true, subtree: true });
 }
