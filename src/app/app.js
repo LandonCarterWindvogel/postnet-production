@@ -155,14 +155,25 @@ function bindEvents() {
       return;
     }
 
+    const branchViewButton = event.target.closest('[data-branch-filter]');
+    if (branchViewButton) {
+      setBoardPage(1);
+      setFilters({ branch: branchViewButton.dataset.branchFilter || '' });
+      return;
+    }
+
     const target = event.target.closest('[data-page]');
-    if (target) setPage(target.dataset.page);
+    if (target) {
+      setPage(target.dataset.page);
+      return;
+    }
 
     const openJob = event.target.closest('[data-open-job]');
     if (openJob) {
       const jobId = openJob.dataset.openJob;
       await fetchJobEvents(jobId);
       selectJob(jobId);
+      return;
     }
 
     const toastEl = event.target.closest('[data-dismiss-toast]');
@@ -192,6 +203,7 @@ function bindEvents() {
       clearStaff();
       clearMachines();
       setPage('board');
+      return;
     }
 
     const advanceBtn = event.target.closest('[data-advance]');
