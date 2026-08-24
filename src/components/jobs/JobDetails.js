@@ -10,9 +10,16 @@ function priorityLabel(priority) {
   return priority === 'standard' ? 'Standard' : priority.charAt(0).toUpperCase() + priority.slice(1);
 }
 
+function productionActionLabel(job) {
+  if (job.status === 'incoming' || job.status === 'queued') return 'Start Production';
+  if (['printing', 'drying', 'contour_cutting', 'cutting', 'weeding', 'heat_press', 'quality_check'].includes(job.status)) return 'Mark Ready';
+  if (job.status === 'ready') return 'Mark Collected / Sent';
+  return null;
+}
+
 export function renderJobDetails(job, profile, userId) {
   const nextStatus = computeNextStatus(job);
-  const actionLabel = job.status === 'incoming' ? 'Accept into queue' : (nextStatus ? `Move to ${STATUS_LABELS[nextStatus]}` : 'Complete');
+  const actionLabel = productionActionLabel(job);
   const canReject = isProduction(profile) && !isClosed(job) && job.status !== 'rejected';
   const canResubmit = !isProduction(profile) && job.status === 'rejected' && job.branch === profile.branch;
   const correctionReason = job.status === 'rejected' ? job.notes : null;
@@ -26,7 +33,7 @@ export function renderJobDetails(job, profile, userId) {
     </div>
     <div class="details-heading__actions">
       ${job.priority !== 'standard' ? `<span class="priority-badge priority-${job.priority}">${priorityLabel(job.priority)}</span>` : ''}
-      ${isProduction(profile) && nextStatus ? `<button class="button button--primary" data-advance="${job.id}">${actionLabel}</button>` : ''}
+      ${isProduction(profile) && actionLabel ? `<button class="button button--primary" data-advance="${job.id}">${actionLabel}</button>` : ''}
     </div>
   </section>
 
@@ -47,6 +54,7 @@ export function renderJobDetails(job, profile, userId) {
         <div><dt>Material</dt><dd>${escapeHtml(job.material)}</dd></div>
         <div><dt>Specification</dt><dd>${escapeHtml(job.specification)}</dd></div>
         <div><dt>Quantity</dt><dd>${job.quantity}</dd></div>
+        ${job.estimated_machine_minutes ? `<div><dt>Estimated machine time</dt><dd>≈ ${Math.round(job.estimated_machine_minutes)} min · print + cut only</dd></div>` : ''}
         ${job.expected_ready_by ? `<div><dt>Expected ready by</dt><dd>${formatDateTime(job.expected_ready_by)}</dd></div>` : ''}
         ${job.ready_at ? `<div><dt>Ready at</dt><dd>${formatDateTime(job.ready_at)}</dd></div>` : ''}
         ${job.collected_at ? `<div><dt>Collected at</dt><dd>${formatDateTime(job.collected_at)}</dd></div>` : ''}
