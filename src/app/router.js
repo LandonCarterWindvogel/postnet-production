@@ -1,14 +1,30 @@
 // Maps the current page id to the HTML for that page. This is the only
 // file that needs to change when a new nav destination is added.
 
-import { renderProductionBoard, jobCard } from '../components/board/ProductionBoard.js';
+import { renderProductionBoard } from '../components/board/ProductionBoard.js';
 import { renderNewJobForm } from '../components/jobs/NewJobForm.js';
 import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';
 import { renderSettings } from '../components/settings/StaffSettings.js';
 import { renderBranchDashboard } from '../components/dashboard/BranchDashboard.js';
 import { isProduction } from '../utils/helpers.js';
-import { escapeHtml } from '../utils/formatters.js';
+import { escapeHtml, formatJobNumber } from '../utils/formatters.js';
+import { STATUS_LABELS } from '../utils/constants.js';
+
+function renderHistoryCard(job) {
+  const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
+  const statusLabel = STATUS_LABELS[job.status] || job.status;
+
+  return `<article class="job-card ${job.priority === 'urgent' ? 'priority-urgent' : ''}" data-open-job="${job.id}">
+    <div class="job-card__top">
+      <span class="job-id">${formatJobNumber(job)}</span>
+      <span class="status">${escapeHtml(statusLabel)}</span>
+    </div>
+    <h3>${escapeHtml(job.customer_name)}</h3>
+    <p>${escapeHtml(job.branch)} · ${typeLabel}</p>
+    <p>${escapeHtml(job.material)} · ${escapeHtml(job.specification)} · ${job.quantity}</p>
+  </article>`;
+}
 
 export function renderPage(page, { jobs, profile, error, selectedId, userId, stock, stockError, staff, staffError, machines, searchQuery, filters }) {
   switch (page) {
@@ -32,7 +48,7 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
         : `Every job submitted by ${escapeHtml(profile.branch)}.`;
 
       return `<section class="page-heading"><div><p class="eyebrow">Job history</p><h1>My Jobs</h1><p>${subtitle}</p></div></section>
-        <section class="job-table">${myJobs.map(jobCard).join('') || '<p>No jobs yet.</p>'}</section>`;
+        <section class="job-table">${myJobs.map(renderHistoryCard).join('') || '<p>No jobs yet.</p>'}</section>`;
     }
 
     case 'dashboard':
