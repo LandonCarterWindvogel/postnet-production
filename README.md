@@ -1,6 +1,6 @@
 # PostNet Production
 
-PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history, correction/resubmission workflow, and role-based branch access.
+PostNet Production is a browser-based production management PWA for the PostNet Copy & Print workflow. It manages sticker and T-shirt Flex jobs from intake through production and collection, with live Supabase updates, stock visibility, job history, correction/resubmission workflow, role-based branch access, and a machine-time estimator.
 
 ## 1. Current scope
 
@@ -48,7 +48,7 @@ Internal database status for the sticker Cutting stage is `contour_cutting`.
 
 Internal database status for Flex Cutting is `cutting`.
 
-The Production Board intentionally presents the detailed machine states as one user-facing **In Production** phase and presents both internal cutting statuses as one machine context. Do not recreate the old multi-click dashboard unless the business requirement changes.
+The Production Board intentionally presents the detailed machine states as one user-facing **In Production** phase. Sticker and Flex cutting remain separate internal database states but share one visual Cutting context.
 
 ### Returned for correction
 
@@ -62,7 +62,7 @@ This is a separate correction loop, not a backwards production transition. The d
 
 ## 3. Production Board overview
 
-The top summary is intentionally aligned with the simplified workflow:
+The top summary is aligned with the simplified workflow:
 
 - **All** — all active jobs, excluding collected and rejected jobs.
 - **Incoming** — submitted jobs waiting for Production to start.
@@ -70,6 +70,8 @@ The top summary is intentionally aligned with the simplified workflow:
 - **Ready** — jobs completed and waiting for collection/sent handover.
 
 Secondary alerts show **Urgent** and **Returned for Correction** counts.
+
+The board also has permanent **Store Views** for all four branches plus **All Branches**. A store with zero jobs remains selectable and displays an empty state rather than disappearing from the UI.
 
 The detailed internal state remains available in the table as supporting context, but the primary status shown to users is `Incoming`, `In Production`, `Ready`, or `Returned for Correction`.
 
@@ -103,7 +105,7 @@ A user may not proceed from Step 2 unless:
 
 Step 3 requires the artwork checklist before the job is inserted.
 
-The browser's native hidden-control validation must not be relied upon because hidden wizard panels can cause Chrome's `invalid form control ... is not focusable` error. Application-side validation is the source of the user-facing wizard errors, while Supabase constraints remain the server-side backstop.
+Application-side validation is the source of the user-facing wizard errors. Do not rely on hidden wizard panels plus native browser validation because Chrome can produce `invalid form control ... is not focusable` when the invalid control is inside a hidden panel.
 
 ## 6. Machine-time estimator
 
@@ -140,13 +142,13 @@ T-shirt Flex:
 | 200×200 mm | 25 | ~2 h |
 | 300×300 mm | 25 | ~3.5–4 h |
 
-The application uses the midpoint of the supplied ranges as model anchors and interpolates for other valid sizes/quantities. These estimates are not a promise of total customer completion time.
+The application uses the midpoint of the supplied ranges as model anchors and interpolates for other valid sizes/quantities. The estimate is a machine-time estimate, not a promise of total customer completion time.
 
 The estimator code lives in:
 
 `src/utils/machineTime.js`
 
-The client has also supplied a historical VersaWorks CSV export. It contains real BN-20 print logs, including print start/end timestamps, sizes and copies. It can be used later to validate and improve the model, but raw malformed CSV rows must be cleaned before using them for automated statistical fitting.
+A historical VersaWorks/BN-20 CSV export is available for future model validation. It contains real print start/end timestamps, sizes and copy counts. Clean malformed rows before using the export for automated statistical fitting.
 
 ## 7. Stock
 
@@ -171,7 +173,7 @@ Known Orajet baseline for 3164M/3164G:
 
 Stock is currently manually adjusted by Production. Automatic job-level material deduction is intentionally not enabled until reliable per-material consumption rules are established.
 
-Do not silently reinterpret numeric stock quantities when changing units. Unit migrations change the stored unit label; review the displayed stock values after deployment.
+Do not silently reinterpret numeric stock quantities when changing units. Unit migrations change the stored unit label; review displayed values after deployment.
 
 ## 8. Roles and security model
 
@@ -195,20 +197,20 @@ This logic is captured in:
 
 `supabase/migrations/202608170002_fix_profile_privilege_admin_updates.sql`
 
-Do not remove the protection just to make testing easier.
+Do not remove this protection just to make testing easier.
 
 ## 9. Realtime and machine status
 
-Supabase Realtime is used for live job updates.
+Supabase Realtime is used for live job updates, stock changes and other subscribed state.
 
-The frontend's machine status is **queue-derived/manual application state**, not direct VersaWorks or Roland hardware telemetry. Do not describe it as live machine telemetry unless a real hardware integration is added.
+The frontend's machine status is queue-derived/manual application state, not direct VersaWorks or Roland hardware telemetry. Do not describe it as live machine telemetry unless a real hardware integration is added.
 
-The Netlify configuration must allow:
+Netlify must allow:
 
 - Supabase HTTPS
 - Supabase secure Realtime WebSocket (`wss:`)
 
-## 10. UI direction
+## 10. UI direction and assets
 
 The application uses the approved PostNet Copy & Print visual direction:
 
@@ -218,6 +220,7 @@ The application uses the approved PostNet Copy & Print visual direction:
 - Roland machine mark from `public/roland-machine-mark.webp`
 - Four-card production overview: All / Incoming / In Production / Ready
 - Secondary Urgent / Returned for Correction alerts
+- Permanent Store Views for All Branches and all four stores
 - Dense Production Board table with pagination
 - Clear progress indicators and simplified operator actions
 - Guided New Job wizard with live machine-time estimate
@@ -237,7 +240,7 @@ public/roland-machine-mark.webp
 
 Use high-resolution artwork with a transparent background and no white rectangular canvas. After replacing the files, run the normal build/test commands and commit the asset changes.
 
-The application references the files by public URL; do not convert the artwork into large Base64 strings in JavaScript.
+Do not convert the artwork into large Base64 strings in JavaScript. Public static files are the supported approach.
 
 ## 11. Repository architecture
 
@@ -286,23 +289,33 @@ Before merging any production change:
 
 Migrations are ordered by filename and should be applied once, in order, when setting up a new database.
 
-Important migrations include:
+Important workflow/security migrations include:
 
 - `202608020003_staff_management.sql` — production staff management policies
 - `202608020005_fix_profiles_recursion.sql` — safe `is_production()` helper and corrected profile policies
-- `202608020009_workflow_enforcement.sql` — server-side workflow transition enforcement and correction/resubmission rules
+- `202608020009_workflow_enforcement.sql` — server-side workflow enforcement and correction/resubmission rules
 - `202608170001_all_stock_units_kg.sql` — standardizes stock units to kg
 - `202608170002_fix_profile_privilege_admin_updates.sql` — preserves self-escalation protection while allowing explicit admin SQL profile maintenance
+- `202608240001_fix_rejection_transition_order.sql` — checks Production rejection before the incoming acceptance rule so an incoming job can be returned for correction
+- `202608240002_fix_job_state_array_position_cast.sql` — casts the `job_state` enum to text before `array_position()` so workflow validation works with PostgreSQL enum status values
 
-Do **not** rerun already-applied migrations against the production database just because the files exist in the repository.
+Do **not** rerun already-applied migrations against the live production database just because the files exist in the repository.
 
 For a new environment, apply the complete migration history in filename order using the project's normal Supabase migration process.
 
-For a live environment, apply only migrations that are newer than the last successfully applied migration.
+For a live environment, apply only migrations newer than the last successfully applied migration.
 
 ### If a live database was manually patched
 
 If a production fix was made directly in Supabase SQL Editor, create or update a migration that records the same final state before the change is considered complete. Otherwise a future database rebuild can silently lose the fix.
+
+After applying a workflow migration, verify the live trigger/function when the change affects status transitions. Prefer checking the actual function definition with:
+
+```sql
+SELECT pg_get_functiondef(
+  'public.validate_job_status_transition()'::regprocedure
+);
+```
 
 ## 14. Testing matrix before merge
 
@@ -319,7 +332,7 @@ If a production fix was made directly in Supabase SQL Editor, create or update a
 
 ### Simplified production workflow
 
-For stickers and Flex:
+For both job types the operator flow is:
 
 `Incoming → Start Production → In Production → Mark Ready → Ready → Mark Collected / Sent → Collected`
 
@@ -346,6 +359,8 @@ Test all four stores:
 
 Branch users must not see jobs belonging to another branch.
 
+Production's **All Branches** view must remain selectable even when some stores have zero jobs. Each individual store view must also remain selectable with zero jobs.
+
 ### Realtime
 
 Open two authenticated browser sessions and verify job status changes propagate without manual refresh.
@@ -357,6 +372,17 @@ Verify every material displays `kg` and stock changes are persisted/realtime.
 ### Role security
 
 Verify a branch user cannot change their own role or branch through the application.
+
+### Console/build gate
+
+Before merge:
+
+- no `ERR_INVALID_URL`
+- no `invalid form control ... is not focusable`
+- no uncaught JavaScript errors
+- no Supabase Realtime errors
+- `npm run check` passes
+- `npm run build` passes
 
 ## 15. Deployment
 
@@ -409,6 +435,9 @@ When changing a workflow:
 - Preserve the simplified operator actions unless the business explicitly requests more manual stages.
 - Add/update migrations for database changes.
 - Update the testing matrix in this README.
+- Test both sticker and Flex transitions separately because their internal machine workflows differ.
+- Do not change database trigger ordering casually: `incoming → rejected` must be handled before the `incoming → queued` acceptance rule.
+- Keep enum values cast to text before using them with `text[]` functions such as `array_position()`.
 
 When changing roles/RLS:
 
@@ -429,17 +458,33 @@ When changing database logic:
 - Prefer idempotent migrations (`create or replace`, `drop ... if exists` where appropriate).
 - Never silently reset live production quantities or jobs.
 - Record manual production fixes in a migration before release.
+- Verify the live function/trigger after applying workflow-related migrations.
 
 ## 18. Current release state
 
 The current UI redesign is developed on the `ui/postnet-copy-print` branch while `main` remains the known-good production branch.
 
-Do not merge the redesign branch until:
+The current branch has passed the client-requested workflow tests through the final console-error sweep, including:
 
-- the final brand artwork is supplied
-- the full browser test matrix passes
-- the four-store visibility tests pass
-- the correction/resubmission loop passes
-- the Realtime tests pass
-- the final Supabase migration set matches the live database
-- `npm run check` and `npm run build` both pass
+- New Job size validation
+- Sticker and Flex machine-time estimates
+- Start Production
+- Sticker internal workflow
+- Flex internal workflow
+- Production rejection
+- Needs Attention / correction reason
+- Branch resubmission
+- Re-entry into Incoming
+- Realtime propagation
+- Four-store views and branch isolation
+- Store filtering including zero-job stores
+- Stock display in kg
+- Role/self-escalation protection
+- Browser console error sweep
+
+Before merge, still require:
+
+- the final `npm run check` result
+- the final `npm run build` result
+- confirmation that the live Supabase migration set matches the repository
+- PR review of the complete diff
