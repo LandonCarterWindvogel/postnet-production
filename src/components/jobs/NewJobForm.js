@@ -48,11 +48,16 @@ export function renderNewJobForm(profile, stockItems = []) {
       </section>
 
       <section class="wizard-panel" data-wizard-panel="2" hidden>
-        <div class="wizard-panel__heading"><span class="wizard-panel__eyebrow">Step 2</span><h2>Sizes &amp; Materials</h2><p>Define the physical production requirements.</p></div>
+        <div class="wizard-panel__heading"><span class="wizard-panel__eyebrow">Step 2</span><h2>Sizes &amp; Materials</h2><p>Enter the physical size and quantity so the app can estimate the BN-20 machine time.</p></div>
         <div class="form-grid">
-          <label>Size / placement<input name="specification" required placeholder="90 × 50 mm or front chest"></label>
-          <label>Quantity<input name="quantity" type="number" min="1" required></label>
+          <label>Width (mm)<input name="widthMm" type="number" min="1" step="1" required inputmode="decimal" placeholder="50"></label>
+          <label>Height (mm)<input name="heightMm" type="number" min="1" step="1" required inputmode="decimal" placeholder="50"></label>
+          <label>Quantity<input name="quantity" type="number" min="1" step="1" required inputmode="numeric" placeholder="100"></label>
           <label>Material<select name="material" id="material">${materialOptions('stickers')}</select><small id="stock-warning" class="stock-warning"></small></label>
+        </div>
+        <input type="hidden" name="specification" value="">
+        <div class="machine-estimate-card" data-machine-estimate aria-live="polite">
+          <span>Estimated machine time</span><strong>Enter size and quantity</strong><small>Print + cut only · excludes queue, drying, weeding, pressing and QC.</small>
         </div>
         <div class="material-summary">
           <span>Selected material</span><strong id="selected-material-label">Gloss Vinyl</strong><small>Stock is tracked in kilograms (kg).</small>
@@ -72,10 +77,13 @@ export function renderNewJobForm(profile, stockItems = []) {
             <div><dt>Reference</dt><dd data-review="emailReference">—</dd></div>
           </dl></div>
           <div class="review-card"><span>Sizes &amp; materials</span><dl>
-            <div><dt>Specification</dt><dd data-review="specification">—</dd></div>
+            <div><dt>Size</dt><dd data-review="specification">—</dd></div>
             <div><dt>Quantity</dt><dd data-review="quantity">—</dd></div>
             <div><dt>Material</dt><dd data-review="material">—</dd></div>
           </dl></div>
+        </div>
+        <div class="machine-estimate-card machine-estimate-card--review" data-review-machine-estimate>
+          <span>Estimated machine time</span><strong>—</strong><small>Print + cut only.</small>
         </div>
         <div class="artwork-checklist">
           <h3>Artwork checklist</h3>
