@@ -23,6 +23,11 @@
 .checklist-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; }
 .detail-action-form { margin-top: 12px; }
 .form-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.machine-estimate-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 12px; padding: 13px 15px; margin-top: 12px; border: 1px solid #eadde1; border-left: 4px solid var(--postnet-red); border-radius: 8px; background: linear-gradient(135deg, #fff, #fff8f9); }
+.machine-estimate-card span { color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.machine-estimate-card strong { color: var(--postnet-red); font-size: 18px; line-height: 1.1; }
+.machine-estimate-card small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.machine-estimate-card--review { margin: 12px 0; max-width: 1050px; }
 .stock-section__heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
 .stock-section__heading h2 { margin-top: 3px; }
 .stock-section__unit { color: var(--muted); font-size: 10px; }
