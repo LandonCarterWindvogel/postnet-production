@@ -10,6 +10,7 @@ import { ROLAND_MACHINE_MARK } from '../../utils/brandAssets.js';
 
 const PRIORITY_ORDER = { urgent: 0, rush: 1, standard: 2 };
 const PAGE_SIZE = 10;
+const MACHINE_STATUSES = ['printing', 'drying', 'contour_cutting', 'cutting', 'weeding', 'heat_press', 'quality_check'];
 let boardPage = 1;
 
 export function setBoardPage(page) {
@@ -22,7 +23,7 @@ function progressForJob(job) {
   if (job.status === 'rejected') return 0;
   const workflow = WORKFLOWS[job.job_type] || [];
   const index = workflow.indexOf(job.status);
-  return index < 0 ? 0 : Math.round(((index + 1) / workflow.length) * 100);
+  return index < 0 ? 50 : Math.round(((index + 1) / workflow.length) * 100);
 }
 
 function priorityLabel(priority) {
@@ -31,6 +32,29 @@ function priorityLabel(priority) {
 
 function statusClass(status) {
   return `status-${status.replace(/_/g, '-')}`;
+}
+
+function isInProduction(job) {
+  return job.status === 'queued' || MACHINE_STATUSES.includes(job.status);
+}
+
+function operatorPhase(job) {
+  if (job.status === 'incoming') return 'Incoming';
+  if (job.status === 'ready') return 'Ready';
+  if (job.status === 'rejected') return 'Returned for Correction';
+  if (job.status === 'collected') return 'Collected / Sent';
+  return 'In Production';
+}
+
+function operatorPhaseClass(job) {
+  return `operator-phase operator-phase--${operatorPhase(job).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function productionActionLabel(job) {
+  if (job.status === 'incoming' || job.status === 'queued') return 'Start Production';
+  if (MACHINE_STATUSES.includes(job.status)) return 'Mark Ready';
+  if (job.status === 'ready') return 'Mark Collected / Sent';
+  return null;
 }
 
 function sortJobs(jobsArray) {
@@ -68,10 +92,9 @@ function machinePill(machine, canEdit, jobs) {
 
 function renderTableRow(job) {
   const progress = progressForJob(job);
-  const nextStatus = computeNextStatus(job);
   const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
-  const status = STATUS_LABELS[job.status] || job.status;
   const updated = job.updated_at ? formatDateTime(job.updated_at) : '—';
+  const actionLabel = productionActionLabel(job);
 
   return `<tr class="job-row ${job.priority === 'urgent' ? 'job-row--urgent' : ''}" data-open-job="${job.id}">
     <td><strong>${formatJobNumber(job)}</strong></td>
@@ -80,24 +103,24 @@ function renderTableRow(job) {
     <td>${typeLabel}</td>
     <td>${escapeHtml(job.material)}</td>
     <td><span class="priority-badge priority-${job.priority}">${priorityLabel(job.priority)}</span></td>
-    <td><span class="status-badge ${statusClass(job.status)}">${escapeHtml(status)}</span></td>
+    <td><span class="${operatorPhaseClass(job)}">${escapeHtml(operatorPhase(job))}</span>${isInProduction(job) && job.status !== 'queued' ? `<small class="phase-detail">${escapeHtml(STATUS_LABELS[job.status] || job.status)}</small>` : ''}</td>
     <td class="progress-cell"><div class="progress-inline"><div class="progress-track"><span style="width:${progress}%"></span></div><span>${progress}%</span></div></td>
     <td>${escapeHtml(updated)}</td>
-    <td class="next-cell">${nextStatus ? `→ ${escapeHtml(STATUS_LABELS[nextStatus] || nextStatus)}` : '—'}</td>
+    <td class="next-cell">${actionLabel ? `→ ${escapeHtml(actionLabel)}` : '—'}</td>
   </tr>`;
 }
 
 export function jobCard(job) {
   const progress = progressForJob(job);
-  const nextStatus = computeNextStatus(job);
   const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
+  const actionLabel = productionActionLabel(job);
   return `<article class="job-card ${job.priority === 'urgent' ? 'priority-urgent' : ''}" data-open-job="${job.id}">
-    <div class="job-card__top"><span class="job-id">${formatJobNumber(job)}</span><span class="status-badge ${statusClass(job.status)}">${STATUS_LABELS[job.status] || job.status}</span></div>
+    <div class="job-card__top"><span class="job-id">${formatJobNumber(job)}</span><span class="${operatorPhaseClass(job)}">${escapeHtml(operatorPhase(job))}</span></div>
     <h3>${escapeHtml(job.customer_name)}</h3>
     <p>${escapeHtml(job.branch)} · ${typeLabel}</p>
     <p>${escapeHtml(job.material)} · ${escapeHtml(job.specification)} · ${job.quantity}</p>
     <div class="progress-inline"><div class="progress-track"><span style="width:${progress}%"></span></div><span>${progress}%</span></div>
-    <small>Next: ${escapeHtml(nextStatus ? (STATUS_LABELS[nextStatus] || nextStatus) : 'Complete')}</small>
+    <small>${escapeHtml(actionLabel || 'Complete')}</small>
   </article>`;
 }
 
@@ -131,27 +154,19 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
 
   const counts = {
     all: active.length,
-    queued: active.filter((j) => j.status === 'queued').length,
-    printing: active.filter((j) => j.status === 'printing').length,
-    drying: active.filter((j) => j.status === 'drying').length,
-    cutting: active.filter((j) => ['cutting', 'contour_cutting'].includes(j.status)).length,
-    weeding: active.filter((j) => j.status === 'weeding').length,
-    qc: active.filter((j) => j.status === 'quality_check').length,
-    ready: active.filter((j) => j.status === 'ready').length
+    incoming: active.filter((job) => job.status === 'incoming').length,
+    inProduction: active.filter((job) => isInProduction(job)).length,
+    ready: active.filter((job) => job.status === 'ready').length
   };
 
-  const overdue = active.filter((job) => job.expected_ready_by && new Date() > new Date(job.expected_ready_by));
   const urgent = active.filter((job) => job.priority === 'urgent');
+  const overdue = active.filter((job) => job.expected_ready_by && new Date() > new Date(job.expected_ready_by));
   const summary = { overdue: overdue.length, urgent: urgent.length, returned: returnedJobs.length, ready: counts.ready, returnedJobs };
 
   const statusItems = [
     ['All', counts.all, ''],
-    ['Queued', counts.queued, 'queued'],
-    ['Printing', counts.printing, 'printing'],
-    ['Drying', counts.drying, 'drying'],
-    ['Cutting', counts.cutting, 'cutting'],
-    ['Weeding', counts.weeding, 'weeding'],
-    ['QC', counts.qc, 'quality-check'],
+    ['Incoming', counts.incoming, 'incoming'],
+    ['In Production', counts.inProduction, 'in-production'],
     ['Ready', counts.ready, 'ready']
   ];
 
@@ -159,7 +174,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
     <label class="search-box"><span aria-hidden="true">⌕</span><input type="text" id="search-input" placeholder="Search jobs, customers or references…" value="${escapeHtml(searchQuery)}" aria-label="Search jobs"></label>
     <select id="filter-branch" aria-label="Filter by branch"><option value="">All Branches</option><option value="Plettenberg Bay">Plettenberg Bay</option><option value="Knysna">Knysna</option><option value="Waterside">Waterside</option><option value="Sedgefield">Sedgefield</option></select>
     <select id="filter-priority" aria-label="Filter by priority"><option value="">All Priorities</option><option value="standard">Standard</option><option value="rush">Rush</option><option value="urgent">Urgent</option></select>
-    <select id="filter-status" aria-label="Filter by status"><option value="">All Statuses</option>${BOARD_STATUSES.map((status) => `<option value="${status}">${status === 'cutting' ? 'Cutting — T-shirt Flex' : status === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[status]}</option>`).join('')}</select>
+    <select id="filter-status" aria-label="Filter by internal status"><option value="">All Production States</option>${BOARD_STATUSES.map((status) => `<option value="${status}">${status === 'cutting' ? 'Cutting — T-shirt Flex' : status === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[status]}</option>`).join('')}</select>
     <select id="filter-type" aria-label="Filter by type"><option value="">All Types</option><option value="stickers">Stickers</option><option value="flex">T-shirt Flex</option></select>
     <select id="filter-material" aria-label="Filter by material"><option value="">All Materials</option>${Array.from(new Set(active.map((j) => j.material))).sort().map((material) => `<option value="${escapeHtml(material)}">${escapeHtml(material)}</option>`).join('')}</select>
   </div>`;
@@ -170,16 +185,17 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
 
   return `<section class="production-board-page">
     <header class="board-header">
-      <div><p class="eyebrow">Production centre</p><h1>Production Board</h1><p>Overview of all jobs in production.</p></div>
+      <div><p class="eyebrow">Production centre</p><h1>Production Board</h1><p>Live overview of active production jobs.</p></div>
       <div class="board-header__actions">${machinePill(machines[0], canEditMachines, active)}<button class="button button--primary" data-page="new-job">+ New Job</button></div>
     </header>
     ${error ? `<p class="form-error form-error--banner">${escapeHtml(error)}</p>` : ''}
-    <section class="status-strip" aria-label="Production stage counts">${statusItems.map(([label, count, key]) => `<div class="status-strip__item ${key ? `status-strip__item--${key}` : ''}"><span>${label}</span><strong>${count}</strong></div>`).join('')}</section>
+    <section class="status-strip" aria-label="Active production overview">${statusItems.map(([label, count, key]) => `<div class="status-strip__item ${key ? `status-strip__item--${key}` : ''}"><span>${label}</span><strong>${count}</strong></div>`).join('')}</section>
+    <div class="board-alerts"><span class="board-alert">Urgent <strong>${urgent.length}</strong></span><span class="board-alert">Returned for Correction <strong>${returnedJobs.length}</strong></span></div>
     ${renderNeedsAttention(summary)}
     ${filterHtml}
     <section class="board-table-wrap" aria-label="Production jobs">
       <table class="production-table">
-        <thead><tr><th>ID</th><th>Branch</th><th>Customer</th><th>Type</th><th>Material</th><th>Priority</th><th>Status</th><th>Progress</th><th>Updated</th><th>Next</th></tr></thead>
+        <thead><tr><th>ID</th><th>Branch</th><th>Customer</th><th>Type</th><th>Material</th><th>Priority</th><th>Status</th><th>Progress</th><th>Updated</th><th>Action</th></tr></thead>
         <tbody>${visible.map(renderTableRow).join('') || '<tr><td colspan="10" class="table-empty">No jobs match the current filters.</td></tr>'}</tbody>
       </table>
     </section>
