@@ -1,6 +1,6 @@
 // Production Board: compact PostNet Copy & Print queue view for desktop production use.
 
-import { BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS } from '../../utils/constants.js';
+import { BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS, BRANCHES } from '../../utils/constants.js';
 import { WORKFLOWS } from '../../config.js';
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
@@ -30,14 +30,6 @@ function priorityLabel(priority) {
   return priority === 'standard' ? 'Standard' : priority.charAt(0).toUpperCase() + priority.slice(1);
 }
 
-function statusClass(status) {
-  return `status-${status.replace(/_/g, '-')}`;
-}
-
-function isInProduction(job) {
-  return job.status === 'queued' || MACHINE_STATUSES.includes(job.status);
-}
-
 function operatorPhase(job) {
   if (job.status === 'incoming') return 'Incoming';
   if (job.status === 'ready') return 'Ready';
@@ -48,6 +40,10 @@ function operatorPhase(job) {
 
 function operatorPhaseClass(job) {
   return `operator-phase operator-phase--${operatorPhase(job).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function isInProduction(job) {
+  return job.status === 'queued' || MACHINE_STATUSES.includes(job.status);
 }
 
 function productionActionLabel(job) {
@@ -110,18 +106,18 @@ function renderTableRow(job) {
   </tr>`;
 }
 
-export function jobCard(job) {
-  const progress = progressForJob(job);
-  const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
-  const actionLabel = productionActionLabel(job);
-  return `<article class="job-card ${job.priority === 'urgent' ? 'priority-urgent' : ''}" data-open-job="${job.id}">
-    <div class="job-card__top"><span class="job-id">${formatJobNumber(job)}</span><span class="${operatorPhaseClass(job)}">${escapeHtml(operatorPhase(job))}</span></div>
-    <h3>${escapeHtml(job.customer_name)}</h3>
-    <p>${escapeHtml(job.branch)} · ${typeLabel}</p>
-    <p>${escapeHtml(job.material)} · ${escapeHtml(job.specification)} · ${job.quantity}</p>
-    <div class="progress-inline"><div class="progress-track"><span style="width:${progress}%"></span></div><span>${progress}%</span></div>
-    <small>${escapeHtml(actionLabel || 'Complete')}</small>
-  </article>`;
+function storeViews(jobs, selectedBranch) {
+  const allCount = jobs.filter((job) => !isClosed(job)).length;
+  const buttons = [
+    `<button type="button" class="store-view ${selectedBranch === '' ? 'active' : ''}" data-branch-filter=""><strong>All Branches</strong><span>${allCount} active jobs</span></button>`
+  ];
+
+  BRANCHES.forEach((branch) => {
+    const count = jobs.filter((job) => !isClosed(job) && job.branch === branch).length;
+    buttons.push(`<button type="button" class="store-view ${selectedBranch === branch ? 'active' : ''}" data-branch-filter="${escapeHtml(branch)}"><strong>${escapeHtml(branch)}</strong><span>${count} active jobs</span></button>`);
+  });
+
+  return `<section class="store-views" aria-label="Store views">${buttons.join('')}</section>`;
 }
 
 export function renderProductionBoard({ jobs, profile, error, machines = [], searchQuery = '', filters = {} }) {
@@ -172,11 +168,11 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
 
   const filterHtml = `<div class="board-toolbar">
     <label class="search-box"><span aria-hidden="true">⌕</span><input type="text" id="search-input" placeholder="Search jobs, customers or references…" value="${escapeHtml(searchQuery)}" aria-label="Search jobs"></label>
-    <select id="filter-branch" aria-label="Filter by branch"><option value="">All Branches</option><option value="Plettenberg Bay">Plettenberg Bay</option><option value="Knysna">Knysna</option><option value="Waterside">Waterside</option><option value="Sedgefield">Sedgefield</option></select>
-    <select id="filter-priority" aria-label="Filter by priority"><option value="">All Priorities</option><option value="standard">Standard</option><option value="rush">Rush</option><option value="urgent">Urgent</option></select>
-    <select id="filter-status" aria-label="Filter by internal status"><option value="">All Production States</option>${BOARD_STATUSES.map((status) => `<option value="${status}">${status === 'cutting' ? 'Cutting — T-shirt Flex' : status === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[status]}</option>`).join('')}</select>
-    <select id="filter-type" aria-label="Filter by type"><option value="">All Types</option><option value="stickers">Stickers</option><option value="flex">T-shirt Flex</option></select>
-    <select id="filter-material" aria-label="Filter by material"><option value="">All Materials</option>${Array.from(new Set(active.map((j) => j.material))).sort().map((material) => `<option value="${escapeHtml(material)}">${escapeHtml(material)}</option>`).join('')}</select>
+    <select id="filter-branch" aria-label="Filter by branch"><option value="" ${filters.branch === '' ? 'selected' : ''}>All Branches</option>${BRANCHES.map((branch) => `<option value="${escapeHtml(branch)}" ${filters.branch === branch ? 'selected' : ''}>${escapeHtml(branch)}</option>`).join('')}</select>
+    <select id="filter-priority" aria-label="Filter by priority"><option value="" ${filters.priority === '' ? 'selected' : ''}>All Priorities</option><option value="standard" ${filters.priority === 'standard' ? 'selected' : ''}>Standard</option><option value="rush" ${filters.priority === 'rush' ? 'selected' : ''}>Rush</option><option value="urgent" ${filters.priority === 'urgent' ? 'selected' : ''}>Urgent</option></select>
+    <select id="filter-status" aria-label="Filter by internal status"><option value="" ${filters.status === '' ? 'selected' : ''}>All Production States</option>${BOARD_STATUSES.map((status) => `<option value="${status}" ${filters.status === status ? 'selected' : ''}>${status === 'cutting' ? 'Cutting — T-shirt Flex' : status === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[status]}</option>`).join('')}</select>
+    <select id="filter-type" aria-label="Filter by type"><option value="" ${filters.type === '' ? 'selected' : ''}>All Types</option><option value="stickers" ${filters.type === 'stickers' ? 'selected' : ''}>Stickers</option><option value="flex" ${filters.type === 'flex' ? 'selected' : ''}>T-shirt Flex</option></select>
+    <select id="filter-material" aria-label="Filter by material"><option value="" ${filters.material === '' ? 'selected' : ''}>All Materials</option>${Array.from(new Set(active.map((j) => j.material))).sort().map((material) => `<option value="${escapeHtml(material)}" ${filters.material === material ? 'selected' : ''}>${escapeHtml(material)}</option>`).join('')}</select>
   </div>`;
 
   const pageStart = filtered.length ? start + 1 : 0;
@@ -191,6 +187,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
     ${error ? `<p class="form-error form-error--banner">${escapeHtml(error)}</p>` : ''}
     <section class="status-strip" aria-label="Active production overview">${statusItems.map(([label, count, key]) => `<div class="status-strip__item ${key ? `status-strip__item--${key}` : ''}"><span>${label}</span><strong>${count}</strong></div>`).join('')}</section>
     <div class="board-alerts"><span class="board-alert">Urgent <strong>${urgent.length}</strong></span><span class="board-alert">Returned for Correction <strong>${returnedJobs.length}</strong></span></div>
+    ${storeViews(jobs, filters.branch || '')}
     ${renderNeedsAttention(summary)}
     ${filterHtml}
     <section class="board-table-wrap" aria-label="Production jobs">
