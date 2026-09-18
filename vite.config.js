@@ -13,8 +13,8 @@ export default defineConfig({
         theme_color: '#123b31',
         background_color: '#f6f7f4',
         display: 'standalone',
-        start_url: '/',
-        icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
+        start_url: '/postnet-production/',
+        icons: [{ src: '/postnet-production/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
       }
     })
   ]
