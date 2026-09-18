@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/postnet-production/',
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
