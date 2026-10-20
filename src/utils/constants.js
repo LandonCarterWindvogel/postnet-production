@@ -39,6 +39,7 @@ export const BRANCHES = [
 ];
 
 export const ROLE_LABELS = {
+  system_admin: 'System Admin',
   production: 'Production',
   branch_admin: 'Branch Admin',
   branch_user: 'Branch User'
