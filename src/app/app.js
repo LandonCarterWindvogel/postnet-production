@@ -441,8 +441,9 @@ function bindEvents() {
       if (!items.length) errors.push('Add at least one sticker or T-shirt Flex item.');
       items.forEach((item, index) => {
         const itemLabel = `Item ${index + 1}`;
-        if (!Number.isFinite(item.width_mm) || item.width_mm <= 0 || !Number.isFinite(item.height_mm) || item.height_mm <= 0) {
-          errors.push(`${itemLabel}: enter a valid width and height.`);
+        if (!Number.isFinite(item.width_mm) || item.width_mm <= 0 || item.width_mm > 10000 ||
+            !Number.isFinite(item.height_mm) || item.height_mm <= 0 || item.height_mm > 10000) {
+          errors.push(`${itemLabel}: enter a width and height between 1 and 10,000 mm.`);
         }
         if (!Number.isInteger(item.quantity) || item.quantity < 1) {
           errors.push(`${itemLabel}: quantity must be a whole number of at least 1.`);
