@@ -17,7 +17,8 @@ export function renderJobTimeline(job) {
     ready: 'Ready for collection',
     collected: 'Collected',
     rush_confirmed: 'Rush confirmed',
-    note_added: 'Note added'
+    note_added: 'Note added',
+    details_updated: 'Job details updated'
   };
 
   const html = events.map(ev => `

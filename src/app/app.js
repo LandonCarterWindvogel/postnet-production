@@ -16,6 +16,7 @@ import {
   getJobState,
   refreshJobs,
   createJob,
+  updateJobDetails,
   advanceJob,
   rejectJob,
   resubmitJob,
@@ -112,11 +113,13 @@ function showWizardStep(step) {
 
 function collectJobItems(form) {
   return [...form.querySelectorAll('[data-item-row]')].map((row) => ({
+    name: row.querySelector('[data-item-field="name"]').value.trim(),
     type: row.querySelector('[data-item-field="type"]').value,
     width_mm: Number(row.querySelector('[data-item-field="width_mm"]').value),
     height_mm: Number(row.querySelector('[data-item-field="height_mm"]').value),
     quantity: Number(row.querySelector('[data-item-field="quantity"]').value),
-    material: row.querySelector('[data-item-field="material"]').value
+    material: row.querySelector('[data-item-field="material"]').value,
+    notes: row.querySelector('[data-item-field="notes"]').value.trim()
   }));
 }
 
@@ -141,10 +144,14 @@ function updateWizardReview() {
       : values.get('priority')?.charAt(0).toUpperCase() + values.get('priority')?.slice(1)
   };
 
-  ['branch', 'customer', 'priority', 'emailReference'].forEach((key) => {
+  ['branch', 'customer', 'contactName', 'contactPhone', 'priority', 'emailReference'].forEach((key) => {
     const target = form.querySelector(`[data-review="${key}"]`);
     if (target) target.textContent = labels[key] || values.get(key) || '—';
   });
+  const fulfillmentTarget = form.querySelector('[data-review="fulfillmentMethod"]');
+  if (fulfillmentTarget) fulfillmentTarget.textContent = values.get('fulfillmentMethod') === 'delivery' ? 'Delivery' : 'Collection at branch';
+  const addressTarget = form.querySelector('[data-review="deliveryAddress"]');
+  if (addressTarget) addressTarget.textContent = values.get('fulfillmentMethod') === 'delivery' ? (values.get('deliveryAddress') || '—') : '—';
 
   const typeTarget = form.querySelector('[data-review="type"]');
   if (typeTarget) typeTarget.textContent = jobTypeLabelForItems(items);
@@ -156,7 +163,8 @@ function updateWizardReview() {
         ? `${item.width_mm} × ${item.height_mm} mm`
         : 'Size not entered';
       const quantity = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : '—';
-      return `<article class="review-item"><strong>${index + 1}. ${escapeHtml(itemTypeLabel(item.type))}</strong><span>${escapeHtml(size)} · Qty ${quantity}</span><small>${escapeHtml(item.material)}</small></article>`;
+      const itemName = item.name || `${itemTypeLabel(item.type)} ${index + 1}`;
+      return `<article class="review-item"><strong>${index + 1}. ${escapeHtml(itemName)} · ${escapeHtml(itemTypeLabel(item.type))}</strong><span>${escapeHtml(size)} · Qty ${quantity}</span><small>${escapeHtml(item.material)}</small>${item.notes ? `<small>Instructions: ${escapeHtml(item.notes)}</small>` : ''}</article>`;
     }).join('') || '<p>Add at least one item.</p>';
   }
 
@@ -184,28 +192,128 @@ function syncItemRows(form) {
   updateWizardReview();
 }
 
+function syncFulfillmentFields(form) {
+  if (!form) return;
+  const method = form.querySelector('[data-fulfillment-method]')?.value || 'collection';
+  const field = form.querySelector('[data-delivery-address-field]');
+  const address = form.querySelector('[name="deliveryAddress"]');
+  if (field) field.hidden = method !== 'delivery';
+  if (address) {
+    address.disabled = method !== 'delivery';
+    address.required = method === 'delivery';
+  }
+}
+
+function applyReportFilters() {
+  const table = document.querySelector('[data-report-table]');
+  if (!table) return;
+  const panel = table.closest('.report-panel');
+  const start = panel?.querySelector('[data-report-start]')?.value || '';
+  const end = panel?.querySelector('[data-report-end]')?.value || '';
+  const branch = panel?.querySelector('[data-report-branch]')?.value || '';
+  const rows = [...table.querySelectorAll('[data-report-row]')];
+  const visible = [];
+
+  rows.forEach((row) => {
+    const date = row.dataset.reportDate || '';
+    const matches = (!start || date >= start) && (!end || date <= end) && (!branch || row.dataset.reportBranch === branch);
+    row.hidden = !matches;
+    if (matches) visible.push(row);
+  });
+
+  const statuses = visible.map((row) => row.dataset.reportStatus);
+  const values = {
+    total: visible.length,
+    active: statuses.filter((status) => !['collected', 'rejected'].includes(status)).length,
+    ready: statuses.filter((status) => status === 'ready').length,
+    returned: statuses.filter((status) => status === 'rejected').length,
+    collected: statuses.filter((status) => status === 'collected').length
+  };
+  Object.entries(values).forEach(([key, value]) => {
+    const metric = document.querySelector(`[data-report-metric="${key}"]`);
+    if (metric) metric.textContent = String(value);
+  });
+  const empty = table.querySelector('[data-report-empty]');
+  if (empty) empty.hidden = visible.length > 0;
+}
+
 function bindEvents() {
   appEl.addEventListener('click', async (event) => {
-    const addItemButton = event.target.closest('[data-add-item]');
+    const addItemButton = event.target.closest('[data-add-item], [data-edit-add-item]');
     if (addItemButton) {
-      const form = addItemButton.closest('#job-form');
+      const isEditForm = addItemButton.hasAttribute('data-edit-add-item');
+      const form = addItemButton.closest(isEditForm ? '#edit-job-form' : '#job-form');
       const list = form?.querySelector('[data-job-items]');
       if (!form || !list) return;
       const itemCount = list.querySelectorAll('[data-item-row]').length;
-      list.insertAdjacentHTML('beforeend', renderJobItemRow(addItemButton.dataset.addItem, itemCount + 1));
+      const type = isEditForm ? addItemButton.dataset.editAddItem : addItemButton.dataset.addItem;
+      list.insertAdjacentHTML('beforeend', renderJobItemRow(type, itemCount + 1));
       syncItemRows(form);
-      form.dispatchEvent(new Event('input', { bubbles: true }));
+      if (form.id === 'job-form') form.dispatchEvent(new Event('input', { bubbles: true }));
       return;
     }
 
     const removeItemButton = event.target.closest('[data-remove-item]');
     if (removeItemButton) {
-      const form = removeItemButton.closest('#job-form');
+      const form = removeItemButton.closest('form');
       const list = form?.querySelector('[data-job-items]');
       if (!form || !list || list.querySelectorAll('[data-item-row]').length <= 1) return;
       removeItemButton.closest('[data-item-row]')?.remove();
       syncItemRows(form);
-      form.dispatchEvent(new Event('input', { bubbles: true }));
+      if (form.id === 'job-form') form.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    if (event.target.closest('[data-edit-job]')) {
+      const button = event.target.closest('[data-edit-job]');
+      const form = document.getElementById('edit-job-form');
+      if (form) {
+        form.hidden = false;
+        button.hidden = true;
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+
+    if (event.target.closest('[data-cancel-edit]')) {
+      const form = event.target.closest('#edit-job-form');
+      if (form) {
+        form.hidden = true;
+        const button = document.querySelector('[data-edit-job]');
+        if (button) button.hidden = false;
+      }
+      return;
+    }
+
+    if (event.target.closest('[data-report-apply]')) {
+      applyReportFilters();
+      return;
+    }
+
+    if (event.target.closest('[data-report-reset]')) {
+      const panel = event.target.closest('.report-panel');
+      panel?.querySelectorAll('[data-report-start], [data-report-end]').forEach((input) => { input.value = ''; });
+      const branchSelect = panel?.querySelector('[data-report-branch]');
+      if (branchSelect) branchSelect.value = '';
+      applyReportFilters();
+      return;
+    }
+
+    if (event.target.closest('[data-report-export]')) {
+      const table = document.querySelector('[data-report-table]');
+      if (!table) return;
+      const header = [...table.querySelectorAll('thead th')].map((cell) => cell.textContent.trim());
+      const rows = [...table.querySelectorAll('tbody [data-report-row]:not([hidden])')]
+        .map((row) => [...row.cells].map((cell) => cell.textContent.trim()));
+      const quote = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const csv = [header, ...rows].map((row) => row.map(quote).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `postnet-production-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       return;
     }
     const wizardNext = event.target.closest('[data-wizard-next]');
@@ -299,10 +407,13 @@ function bindEvents() {
           .map((value) => `<option>${escapeHtml(value)}</option>`)
           .join('');
       }
-      const form = itemTypeField.closest('#job-form');
+      const form = itemTypeField.closest('form');
       syncItemRows(form);
-      if (form) form.dispatchEvent(new Event('input', { bubbles: true }));
+      if (form?.id === 'job-form') form.dispatchEvent(new Event('input', { bubbles: true }));
     }
+
+    const fulfillmentSelect = event.target.closest('[data-fulfillment-method]');
+    if (fulfillmentSelect) syncFulfillmentFields(fulfillmentSelect.closest('form'));
 
     const searchInput = document.getElementById('search-input');
     const filterBranch = document.getElementById('filter-branch');
@@ -349,6 +460,63 @@ function bindEvents() {
         startMachineRealtime();
       } catch (error) {
         messageEl.textContent = error.message;
+      }
+      return;
+    }
+
+    if (event.target.id === 'edit-job-form') {
+      const editForm = event.target;
+      const form = new FormData(editForm);
+      const jobId = editForm.dataset.jobId;
+      const messageEl = editForm.querySelector('[data-edit-error]');
+      const job = getJobState().jobs.find((item) => item.id === jobId);
+      const items = collectJobItems(editForm);
+      const errors = [];
+      const customerName = String(form.get('customerName') || '').trim();
+      const emailReference = String(form.get('emailReference') || '').trim();
+      const fulfillmentMethod = String(form.get('fulfillmentMethod') || 'collection');
+      const deliveryAddress = String(form.get('deliveryAddress') || '').trim();
+      if (customerName.length < 2 || customerName.length > 160) errors.push('Enter a customer name between 2 and 160 characters.');
+      if (emailReference.length < 3 || emailReference.length > 300) errors.push('Enter an email subject or reference between 3 and 300 characters.');
+      if (form.get('contactName') && String(form.get('contactName')).trim().length === 1) errors.push('Contact person must be at least 2 characters.');
+      if (form.get('contactPhone') && String(form.get('contactPhone')).trim().length > 0 && String(form.get('contactPhone')).trim().length < 3) errors.push('Contact number must be at least 3 characters.');
+      if (fulfillmentMethod === 'delivery' && deliveryAddress.length < 5) errors.push('Enter a delivery address of at least 5 characters.');
+      if (!items.length) errors.push('Add at least one item.');
+      items.forEach((item, index) => {
+        if (!item.name || item.name.length > 80) errors.push(`Item ${index + 1}: enter a name of 1 to 80 characters.`);
+        if (!Number.isFinite(item.width_mm) || item.width_mm <= 0 || item.width_mm > 10000 ||
+            !Number.isFinite(item.height_mm) || item.height_mm <= 0 || item.height_mm > 10000) errors.push(`Item ${index + 1}: enter width and height between 1 and 10,000 mm.`);
+        if (!Number.isInteger(item.quantity) || item.quantity < 1) errors.push(`Item ${index + 1}: quantity must be a whole number of at least 1.`);
+        if (!MATERIALS[item.type]?.includes(item.material)) errors.push(`Item ${index + 1}: choose a valid material.`);
+        if (item.notes.length > 500) errors.push(`Item ${index + 1}: instructions cannot exceed 500 characters.`);
+      });
+      if (errors.length) {
+        if (messageEl) messageEl.textContent = errors[0];
+        return;
+      }
+      if (!job) {
+        if (messageEl) messageEl.textContent = 'This job is no longer available. Refresh and try again.';
+        return;
+      }
+
+      try {
+        const saved = await updateJobDetails(job, {
+          customer_name: customerName,
+          contact_name: String(form.get('contactName') || '').trim() || null,
+          contact_phone: String(form.get('contactPhone') || '').trim() || null,
+          email_reference: emailReference,
+          fulfillment_method: fulfillmentMethod,
+          delivery_address: fulfillmentMethod === 'delivery' ? deliveryAddress : null,
+          priority: form.get('priority'),
+          items,
+          notes: String(form.get('notes') || '').trim() || null,
+          cutlines_included: form.get('cutlines') === 'on'
+        });
+        await fetchJobEvents(saved.id);
+        selectJob(saved.id);
+        pushToast('Job details saved.');
+      } catch (error) {
+        if (messageEl) messageEl.textContent = error.message;
       }
       return;
     }
@@ -434,7 +602,9 @@ function bindEvents() {
         artworkReceived: form.get('artworkReceived') === 'on',
         artworkPrintReady: form.get('artworkPrintReady') === 'on',
         artworkApproved: form.get('artworkApproved') === 'on',
-        cutlinesIncluded: form.get('cutlines') === 'on'
+        cutlinesIncluded: form.get('cutlines') === 'on',
+        fulfillmentMethod: form.get('fulfillmentMethod') || 'collection',
+        deliveryAddress: String(form.get('deliveryAddress') || '').trim()
       };
 
       const errors = validateJobForm(values);
@@ -445,9 +615,13 @@ function bindEvents() {
             !Number.isFinite(item.height_mm) || item.height_mm <= 0 || item.height_mm > 10000) {
           errors.push(`${itemLabel}: enter a width and height between 1 and 10,000 mm.`);
         }
+        if (!item.name || item.name.length > 80) {
+          errors.push(`${itemLabel}: enter a name of 1 to 80 characters.`);
+        }
         if (!Number.isInteger(item.quantity) || item.quantity < 1) {
           errors.push(`${itemLabel}: quantity must be a whole number of at least 1.`);
         }
+        if (item.notes.length > 500) errors.push(`${itemLabel}: instructions cannot exceed 500 characters.`);
         if (!MATERIALS[item.type]?.includes(item.material)) {
           errors.push(`${itemLabel}: choose a valid material for the selected item type.`);
         }
@@ -456,6 +630,9 @@ function bindEvents() {
       if (!values.artworkReceived) errors.push('Please confirm artwork was received by email.');
       if (!values.artworkPrintReady) errors.push('Please confirm artwork is print-ready and correctly sized.');
       if (!values.artworkApproved) errors.push('Please confirm customer approved artwork.');
+      if (values.fulfillmentMethod === 'delivery' && values.deliveryAddress.length < 5) {
+        errors.push('Enter a delivery address of at least 5 characters.');
+      }
       if (errors.length) {
         messageEl.textContent = errors[0];
         return;
@@ -468,7 +645,12 @@ function bindEvents() {
         const job = await createJob({
           branch: form.get('branch'),
           customer_name: form.get('customer'),
+          contact_name: String(form.get('contactName') || '').trim() || null,
+          contact_phone: String(form.get('contactPhone') || '').trim() || null,
           email_reference: form.get('emailReference'),
+          fulfillment_method: values.fulfillmentMethod,
+          delivery_address: values.fulfillmentMethod === 'delivery' ? values.deliveryAddress : null,
+          notes: String(form.get('notes') || '').trim() || null,
           job_type: jobType,
           material: firstItem.material,
           specification: values.specification,

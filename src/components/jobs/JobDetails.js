@@ -5,15 +5,70 @@ import { formatDateTime } from '../../utils/dates.js';
 import { STATUS_LABELS } from '../../utils/constants.js';
 import { computeNextStatus, isClosed, isProduction, getJobTypeLabel, getJobMaterialLabel } from '../../utils/helpers.js';
 import { renderJobTimeline } from './JobTimeline.js';
+import { renderJobItemRow } from './NewJobForm.js';
 
 function jobItems(job) {
   if (Array.isArray(job.items) && job.items.length) return job.items;
+  const size = String(job.specification || '').match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+  const type = job.job_type === 'flex' ? 'flex' : 'stickers';
   return [{
-    type: job.job_type === 'flex' ? 'flex' : 'stickers',
+    type,
+    name: `${type === 'flex' ? 'T-shirt Flex' : 'Sticker'} 1`,
+    width_mm: size ? Number(size[1]) : '',
+    height_mm: size ? Number(size[2]) : '',
     specification: job.specification,
     quantity: job.quantity,
-    material: job.material
+    material: job.material,
+    notes: ''
   }];
+}
+
+function canEditJob(job, profile) {
+  if (!['incoming', 'queued', 'rejected'].includes(job.status)) return false;
+  if (isProduction(profile)) return true;
+  return job.branch === profile?.branch && ['incoming', 'rejected'].includes(job.status);
+}
+
+function renderJobEditForm(job) {
+  const items = jobItems(job);
+  const fulfillment = job.fulfillment_method || 'collection';
+  return `<form class="job-form job-edit-form" id="edit-job-form" data-job-id="${job.id}" hidden>
+    <div class="wizard-panel__heading"><span class="wizard-panel__eyebrow">Job details</span><h2>Edit submitted job</h2><p>Only jobs that have not entered active production can be edited. Saving changes does not change the job status.</p></div>
+    <div class="form-grid">
+      <label>Customer / business name<input name="customerName" maxlength="160" required value="${escapeHtml(job.customer_name || '')}"></label>
+      <label>Contact person<input name="contactName" maxlength="120" value="${escapeHtml(job.contact_name || '')}" placeholder="Optional"></label>
+      <label>Contact number<input name="contactPhone" type="tel" maxlength="40" value="${escapeHtml(job.contact_phone || '')}" placeholder="Optional"></label>
+      <label>Priority<select name="priority">
+        <option value="standard" ${['standard','normal'].includes(job.priority) ? 'selected' : ''}>Standard</option>
+        <option value="rush" ${job.priority === 'rush' ? 'selected' : ''}>Rush</option>
+        <option value="urgent" ${job.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+      </select></label>
+      <label class="form-grid__full">Email subject / reference<input name="emailReference" maxlength="300" required value="${escapeHtml(job.email_reference || '')}"></label>
+      <label>Collection or delivery<select name="fulfillmentMethod" data-fulfillment-method>
+        <option value="collection" ${fulfillment === 'collection' ? 'selected' : ''}>Collection at branch</option>
+        <option value="delivery" ${fulfillment === 'delivery' ? 'selected' : ''}>Delivery</option>
+      </select></label>
+      <label class="form-grid__full" data-delivery-address-field ${fulfillment === 'delivery' ? '' : 'hidden'}>Delivery address<textarea name="deliveryAddress" maxlength="600" rows="2" ${fulfillment === 'delivery' ? 'required' : 'disabled'}>${escapeHtml(job.delivery_address || '')}</textarea></label>
+      <label class="form-grid__full">General production notes<textarea name="notes" maxlength="2000" rows="2" placeholder="Instructions for the entire job">${escapeHtml(job.notes || '')}</textarea></label>
+    </div>
+    <div class="job-edit-form__section"><h3>Items, sizes and instructions</h3><p>Keep each design clearly named; quantities are recorded per item.</p></div>
+    <div class="job-items" data-job-items>
+      ${items.map((item, index) => renderJobItemRow(item.type, index + 1, {
+        ...item,
+        name: item.name || `${item.type === 'flex' ? 'T-shirt Flex' : 'Sticker'} ${index + 1}`
+      })).join('')}
+    </div>
+    <div class="job-item-add-actions" aria-label="Add items">
+      <button type="button" class="button button--ghost" data-edit-add-item="stickers">+ Add Sticker</button>
+      <button type="button" class="button button--ghost" data-edit-add-item="flex">+ Add T-shirt Flex</button>
+    </div>
+    <label class="check job-edit-cutlines"><input type="checkbox" name="cutlines" ${job.cutlines_included ? 'checked' : ''}> Cutlines included</label>
+    <p class="form-error" data-edit-error role="alert"></p>
+    <div class="wizard-actions">
+      <button type="button" class="button button--ghost" data-cancel-edit>Cancel</button>
+      <button type="submit" class="button button--primary">Save changes</button>
+    </div>
+  </form>`;
 }
 
 function renderJobItems(job) {
@@ -22,12 +77,15 @@ function renderJobItems(job) {
     const size = Number(item.width_mm) > 0 && Number(item.height_mm) > 0
       ? `${item.width_mm} × ${item.height_mm} mm`
       : (item.specification || job.specification || '—');
+    const itemName = item.name || `${typeLabel} ${index + 1}`;
     return `<article class="job-item-list__item">
-      <div class="job-item-list__top"><strong>${index + 1}. ${typeLabel}</strong><span>${escapeHtml(size)}</span></div>
+      <div class="job-item-list__top"><strong>${escapeHtml(itemName)}</strong><span>${escapeHtml(size)}</span></div>
       <dl>
+        <div><dt>Type</dt><dd>${typeLabel}</dd></div>
         <div><dt>Material</dt><dd>${escapeHtml(item.material || job.material)}</dd></div>
         <div><dt>Quantity</dt><dd>${escapeHtml(String(item.quantity ?? job.quantity))}</dd></div>
       </dl>
+      ${item.notes ? `<p class="job-item-instructions"><strong>Instructions:</strong> ${escapeHtml(item.notes)}</p>` : ''}
     </article>`;
   }).join('');
 }
@@ -49,6 +107,8 @@ export function renderJobDetails(job, profile, userId) {
   const canReject = isProduction(profile) && !isClosed(job) && job.status !== 'rejected';
   const canResubmit = !isProduction(profile) && job.status === 'rejected' && job.branch === profile.branch;
   const correctionReason = job.status === 'rejected' ? job.notes : null;
+  const editable = canEditJob(job, profile);
+  const fulfillmentLabel = (job.fulfillment_method || 'collection') === 'delivery' ? 'Delivery' : 'Collection at branch';
 
   return `<section class="page-heading page-heading--details">
     <div>
@@ -59,6 +119,7 @@ export function renderJobDetails(job, profile, userId) {
     </div>
     <div class="details-heading__actions">
       ${job.priority !== 'standard' ? `<span class="priority-badge priority-${job.priority}">${priorityLabel(job.priority)}</span>` : ''}
+      ${editable ? `<button class="button button--ghost" data-edit-job>✎ Edit job</button>` : ''}
       ${isProduction(profile) && actionLabel ? `<button class="button button--primary" data-advance="${job.id}">${actionLabel}</button>` : ''}
     </div>
   </section>
@@ -77,11 +138,17 @@ export function renderJobDetails(job, profile, userId) {
     <div class="job-item-list">${renderJobItems(job)}</div>
   </section>
 
+  ${editable ? renderJobEditForm(job) : ''}
+
   <section class="job-details-grid">
     <article class="detail-card">
       <div class="detail-card__heading"><h2>Job Information</h2><span>${formatDateTime(job.created_at)}</span></div>
       <dl class="detail-list">
         <div><dt>Customer reference</dt><dd>${escapeHtml(job.email_reference)}</dd></div>
+        <div><dt>Contact person</dt><dd>${escapeHtml(job.contact_name || '—')}</dd></div>
+        <div><dt>Contact number</dt><dd>${escapeHtml(job.contact_phone || '—')}</dd></div>
+        <div><dt>Fulfilment</dt><dd>${fulfillmentLabel}</dd></div>
+        ${job.fulfillment_method === 'delivery' && job.delivery_address ? `<div><dt>Delivery address</dt><dd>${escapeHtml(job.delivery_address)}</dd></div>` : ''}
         <div><dt>Material</dt><dd>${escapeHtml(getJobMaterialLabel(job))}</dd></div>
         <div><dt>Specification</dt><dd>${escapeHtml(job.specification)}</dd></div>
         <div><dt>Quantity</dt><dd>${job.quantity}</dd></div>

@@ -18,6 +18,26 @@ export async function createJob(job) {
   return data;
 }
 
+export async function updateJobDetails(id, details) {
+  const { data, error } = await supabase.rpc('update_job_details', {
+    p_job_id: id,
+    p_customer_name: details.customer_name,
+    p_contact_name: details.contact_name || null,
+    p_contact_phone: details.contact_phone || null,
+    p_email_reference: details.email_reference,
+    p_fulfillment_method: details.fulfillment_method || 'collection',
+    p_delivery_address: details.delivery_address || null,
+    p_priority: details.priority,
+    p_items: details.items,
+    p_notes: details.notes || null,
+    p_cutlines_included: Boolean(details.cutlines_included)
+  });
+  if (error) throw error;
+  const updated = Array.isArray(data) ? data[0] : data;
+  if (!updated) throw new Error('The job could not be updated. Refresh and try again.');
+  return updated;
+}
+
 async function updateJobAndFetch(id, update) {
   // Do not rely on PostgREST's UPDATE ... RETURNING to produce a single row.
   // RLS/trigger combinations can legitimately return an empty representation even

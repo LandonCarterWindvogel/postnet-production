@@ -7,6 +7,7 @@ import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';
 import { renderSettings } from '../components/settings/StaffSettings.js';
 import { renderBranchDashboard } from '../components/dashboard/BranchDashboard.js';
+import { renderReports } from '../components/reports/Reports.js';
 import { isProduction, getJobTypeLabel, getJobMaterialLabel } from '../utils/helpers.js';
 import { escapeHtml, formatJobNumber } from '../utils/formatters.js';
 import { STATUS_LABELS } from '../utils/constants.js';
@@ -53,6 +54,9 @@ export function renderPage(page, { jobs, profile, error, selectedId, userId, sto
 
     case 'dashboard':
       return renderBranchDashboard({ jobs, profile });
+
+    case 'reports':
+      return renderReports({ jobs, profile });
 
     case 'stock':
       return renderStock({ items: stock, profile, error: stockError });

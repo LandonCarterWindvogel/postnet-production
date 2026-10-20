@@ -4,27 +4,33 @@ import { BRANCHES, MATERIALS } from '../../utils/constants.js';
 import { escapeHtml } from '../../utils/formatters.js';
 import { isProduction } from '../../utils/helpers.js';
 
-export function materialOptions(type) {
-  return MATERIALS[type].map((value) => `<option>${escapeHtml(value)}</option>`).join('');
+export function materialOptions(type, selected = '') {
+  return MATERIALS[type].map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
 }
 
-export function renderJobItemRow(type = 'stickers', index = 1) {
-  const isFlex = type === 'flex';
+export function renderJobItemRow(type = 'stickers', index = 1, item = {}) {
+  const selectedType = item.type || type;
+  const isFlex = selectedType === 'flex';
   const label = isFlex ? 'T-shirt Flex' : 'Sticker';
+  const value = (key) => item[key] === undefined || item[key] === null ? '' : escapeHtml(item[key]);
+  const itemName = item.name || '';
+  const material = item.material || MATERIALS[selectedType][0];
   return `<article class="job-item-card" data-item-row>
     <header class="job-item-card__header">
-      <div><span class="job-item-card__number" data-item-title>${label} ${index}</span><small>Size, quantity and material for this design</small></div>
+      <div><span class="job-item-card__number" data-item-title>${label} ${index}</span><small>Name the design and record its size, quantity and material</small></div>
       <button type="button" class="button button--ghost job-item-card__remove" data-remove-item ${index === 1 ? 'disabled' : ''}>Remove</button>
     </header>
     <div class="form-grid">
+      <label class="form-grid__full">Item / design name<input data-item-field="name" value="${value('name')}" maxlength="80" required placeholder="e.g. Front logo stickers"></label>
       <label>Item type<select data-item-field="type">
         <option value="stickers" ${!isFlex ? 'selected' : ''}>Stickers</option>
         <option value="flex" ${isFlex ? 'selected' : ''}>T-shirt Flex</option>
       </select></label>
-      <label>Width (mm)<input data-item-field="width_mm" type="number" min="1" max="10000" step="1" required inputmode="numeric" placeholder="50"></label>
-      <label>Height (mm)<input data-item-field="height_mm" type="number" min="1" max="10000" step="1" required inputmode="numeric" placeholder="50"></label>
-      <label>Quantity<input data-item-field="quantity" type="number" min="1" step="1" required inputmode="numeric" placeholder="100"></label>
-      <label class="form-grid__full">Material<select data-item-field="material">${materialOptions(type)}</select></label>
+      <label>Width (mm)<input data-item-field="width_mm" type="number" min="1" max="10000" step="1" required inputmode="numeric" value="${value('width_mm')}" placeholder="50"></label>
+      <label>Height (mm)<input data-item-field="height_mm" type="number" min="1" max="10000" step="1" required inputmode="numeric" value="${value('height_mm')}" placeholder="50"></label>
+      <label>Quantity<input data-item-field="quantity" type="number" min="1" step="1" required inputmode="numeric" value="${value('quantity')}" placeholder="100"></label>
+      <label class="form-grid__full">Material<select data-item-field="material">${materialOptions(selectedType, material)}</select></label>
+      <label class="form-grid__full">Instructions for this item<textarea data-item-field="notes" maxlength="500" rows="2" placeholder="Placement, cut instructions, or other design-specific details">${value('notes')}</textarea></label>
     </div>
   </article>`;
 }
@@ -52,9 +58,14 @@ export function renderNewJobForm(profile, stockItems = []) {
         <div class="wizard-panel__heading"><span class="wizard-panel__eyebrow">Step 1</span><h2>Job Information</h2><p>Tell production who the job is for and where it came from.</p></div>
         <div class="form-grid">
           <label>Branch${branchField}</label>
-          <label>Customer name<input name="customer" required autocomplete="organization"></label>
+          <label>Customer / business name<input name="customer" required maxlength="160" autocomplete="organization"></label>
+          <label>Contact person<input name="contactName" maxlength="120" autocomplete="name" placeholder="Person to contact (optional)"></label>
+          <label>Contact number<input name="contactPhone" type="tel" maxlength="40" autocomplete="tel" placeholder="e.g. 082 123 4567"></label>
           <label>Priority<select name="priority"><option value="standard">Standard (24–48 hours)</option><option value="rush">Rush (needs production confirmation)</option><option value="urgent">Urgent (needs production confirmation)</option></select></label>
-          <label class="form-grid__full">Email subject / reference<input name="emailReference" required placeholder="RE: Stickers and T-shirt Flex — Ocean Blue"></label>
+          <label class="form-grid__full">Email subject / reference<input name="emailReference" required maxlength="300" placeholder="RE: Stickers and T-shirt Flex — Ocean Blue"></label>
+          <label>Collection or delivery<select name="fulfillmentMethod" data-fulfillment-method><option value="collection">Collection at branch</option><option value="delivery">Delivery</option></select></label>
+          <label class="form-grid__full" data-delivery-address-field hidden>Delivery address<textarea name="deliveryAddress" disabled maxlength="600" rows="2" autocomplete="street-address" placeholder="Street, town and delivery details"></textarea></label>
+          <label class="form-grid__full">General production notes (optional)<textarea name="notes" rows="2" maxlength="2000" placeholder="Any instructions that apply to the whole job"></textarea></label>
         </div>
         <p class="form-error" data-wizard-error="1" role="alert"></p>
         <div class="wizard-actions"><span></span><button type="button" class="button button--primary" data-wizard-next="2">Next</button></div>
@@ -85,6 +96,10 @@ export function renderNewJobForm(profile, stockItems = []) {
           <div class="review-card"><span>Job summary</span><dl>
             <div><dt>Branch</dt><dd data-review="branch">—</dd></div>
             <div><dt>Customer</dt><dd data-review="customer">—</dd></div>
+            <div><dt>Contact person</dt><dd data-review="contactName">—</dd></div>
+            <div><dt>Contact number</dt><dd data-review="contactPhone">—</dd></div>
+            <div><dt>Collection / delivery</dt><dd data-review="fulfillmentMethod">—</dd></div>
+            <div><dt>Delivery address</dt><dd data-review="deliveryAddress">—</dd></div>
             <div><dt>Job contents</dt><dd data-review="type">—</dd></div>
             <div><dt>Priority</dt><dd data-review="priority">—</dd></div>
             <div><dt>Reference</dt><dd data-review="emailReference">—</dd></div>
