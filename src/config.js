@@ -4,6 +4,7 @@ export const NAV_ITEMS = [
   ['board', 'Production Board'],
   ['new-job', 'New Job'],
   ['my-jobs', 'My Jobs'],
+  ['reports', 'Reports & Export'],
   ['stock', 'Stock'],
   ['settings', 'Settings']
 ];
