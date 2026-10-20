@@ -1,7 +1,7 @@
 // Holds the current list of jobs and notifies subscribers on change.
 // Wraps services/jobs.js (the Supabase calls) so components never talk to Supabase directly.
 
-import { createJob as apiCreateJob, listJobs, setJobStatus, rejectJob as apiRejectJob, resubmitJob as apiResubmitJob, getJobEvents } from '../services/jobs.js';
+import { createJob as apiCreateJob, updateJobDetails as apiUpdateJobDetails, listJobs, setJobStatus, rejectJob as apiRejectJob, resubmitJob as apiResubmitJob, getJobEvents } from '../services/jobs.js';
 import { computeNextStatus } from '../utils/helpers.js';
 import { supabase } from '../services/supabase.js';
 
@@ -104,6 +104,14 @@ export async function createJob(payload) {
   notify();
   emitJobEvent({ type: 'created', job });
   return job;
+}
+
+export async function updateJobDetails(job, details) {
+  if (!job) throw new Error('Select a job to edit.');
+  const saved = await apiUpdateJobDetails(job.id, details);
+  state.jobs = state.jobs.map((item) => (item.id === saved.id ? saved : item));
+  notify();
+  return saved;
 }
 
 // A single production button now performs the logical step for the operator:
