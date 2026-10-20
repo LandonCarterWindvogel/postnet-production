@@ -3,8 +3,34 @@
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
 import { STATUS_LABELS } from '../../utils/constants.js';
-import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
+import { computeNextStatus, isClosed, isProduction, getJobTypeLabel, getJobMaterialLabel } from '../../utils/helpers.js';
 import { renderJobTimeline } from './JobTimeline.js';
+
+function jobItems(job) {
+  if (Array.isArray(job.items) && job.items.length) return job.items;
+  return [{
+    type: job.job_type === 'flex' ? 'flex' : 'stickers',
+    specification: job.specification,
+    quantity: job.quantity,
+    material: job.material
+  }];
+}
+
+function renderJobItems(job) {
+  return jobItems(job).map((item, index) => {
+    const typeLabel = item.type === 'flex' ? 'T-shirt Flex' : 'Sticker';
+    const size = Number(item.width_mm) > 0 && Number(item.height_mm) > 0
+      ? `${item.width_mm} × ${item.height_mm} mm`
+      : (item.specification || job.specification || '—');
+    return `<article class="job-item-list__item">
+      <div class="job-item-list__top"><strong>${index + 1}. ${typeLabel}</strong><span>${escapeHtml(size)}</span></div>
+      <dl>
+        <div><dt>Material</dt><dd>${escapeHtml(item.material || job.material)}</dd></div>
+        <div><dt>Quantity</dt><dd>${escapeHtml(String(item.quantity ?? job.quantity))}</dd></div>
+      </dl>
+    </article>`;
+  }).join('');
+}
 
 function priorityLabel(priority) {
   return priority === 'standard' ? 'Standard' : priority.charAt(0).toUpperCase() + priority.slice(1);
@@ -29,7 +55,7 @@ export function renderJobDetails(job, profile, userId) {
       <button class="button button--ghost" data-page="board">← Back to Board</button>
       <div class="details-heading__id"><span>${formatJobNumber(job)}</span><span class="status-badge status-${job.status.replace(/_/g, '-')}">${STATUS_LABELS[job.status]}</span></div>
       <h1>${escapeHtml(job.customer_name)}</h1>
-      <p>${escapeHtml(job.branch)} · ${job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers'} · ${escapeHtml(job.material)}</p>
+      <p>${escapeHtml(job.branch)} · ${getJobTypeLabel(job)} · ${escapeHtml(getJobMaterialLabel(job))}</p>
     </div>
     <div class="details-heading__actions">
       ${job.priority !== 'standard' ? `<span class="priority-badge priority-${job.priority}">${priorityLabel(job.priority)}</span>` : ''}
@@ -40,18 +66,23 @@ export function renderJobDetails(job, profile, userId) {
   <section class="job-details__meta">
     <article><span>Branch</span><strong>${escapeHtml(job.branch)}</strong></article>
     <article><span>Customer</span><strong>${escapeHtml(job.customer_name)}</strong></article>
-    <article><span>Type</span><strong>${job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers'}</strong></article>
+    <article><span>Type</span><strong>${getJobTypeLabel(job)}</strong></article>
     <article><span>Priority</span><strong>${priorityLabel(job.priority)}</strong></article>
   </section>
 
   <section class="details-tabs" aria-label="Job detail sections"><span class="active">Summary</span><span>Sizes &amp; Materials</span><span>History</span><span>Notes</span><span>Files (Email)</span></section>
+
+  <section class="detail-card detail-card--items">
+    <div class="detail-card__heading"><h2>Items in this job</h2><span>${jobItems(job).length} item${jobItems(job).length === 1 ? '' : 's'}</span></div>
+    <div class="job-item-list">${renderJobItems(job)}</div>
+  </section>
 
   <section class="job-details-grid">
     <article class="detail-card">
       <div class="detail-card__heading"><h2>Job Information</h2><span>${formatDateTime(job.created_at)}</span></div>
       <dl class="detail-list">
         <div><dt>Customer reference</dt><dd>${escapeHtml(job.email_reference)}</dd></div>
-        <div><dt>Material</dt><dd>${escapeHtml(job.material)}</dd></div>
+        <div><dt>Material</dt><dd>${escapeHtml(getJobMaterialLabel(job))}</dd></div>
         <div><dt>Specification</dt><dd>${escapeHtml(job.specification)}</dd></div>
         <div><dt>Quantity</dt><dd>${job.quantity}</dd></div>
         ${job.estimated_machine_minutes ? `<div><dt>Estimated machine time</dt><dd>≈ ${Math.round(job.estimated_machine_minutes)} min · print + cut only</dd></div>` : ''}
