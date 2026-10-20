@@ -9,7 +9,7 @@ import { renderJobItemRow } from './NewJobForm.js';
 
 function jobItems(job) {
   if (Array.isArray(job.items) && job.items.length) return job.items;
-  const size = String(job.specification || '').match(/(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*(\\d+(?:\\.\\d+)?)/i);
+  const size = String(job.specification || '').match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
   const type = job.job_type === 'flex' ? 'flex' : 'stickers';
   return [{
     type,
