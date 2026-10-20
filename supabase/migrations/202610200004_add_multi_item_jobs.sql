@@ -58,7 +58,11 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF jsonb_typeof(NEW.items) <> 'array' OR jsonb_array_length(NEW.items) = 0 THEN
+  IF jsonb_typeof(NEW.items) <> 'array' THEN
+    RAISE EXCEPTION 'Job items must be a JSON array';
+  END IF;
+
+  IF jsonb_array_length(NEW.items) = 0 THEN
     RAISE EXCEPTION 'A job must contain at least one item';
   END IF;
 
