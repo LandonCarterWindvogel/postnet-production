@@ -21,7 +21,7 @@ export function renderJobItemRow(type = 'stickers', index = 1) {
         <option value="stickers" ${!isFlex ? 'selected' : ''}>Stickers</option>
         <option value="flex" ${isFlex ? 'selected' : ''}>T-shirt Flex</option>
       </select></label>
-      <label>Width (mm)<input data-item-field="width_mm" type="number" min="1" step="1" required inputmode="numeric" placeholder="50"></label>
+      <label>Width (mm)<input data-item-field="width_mm" type="number" min="1" max="10000" step="1" required inputmode="numeric" placeholder="50"></label>
       <label>Height (mm)<input data-item-field="height_mm" type="number" min="1" step="1" required inputmode="numeric" placeholder="50"></label>
       <label>Quantity<input data-item-field="quantity" type="number" min="1" step="1" required inputmode="numeric" placeholder="100"></label>
       <label class="form-grid__full">Material<select data-item-field="material">${materialOptions(type)}</select></label>
