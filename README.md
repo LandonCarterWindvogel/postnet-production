@@ -175,15 +175,16 @@ Stock is manually adjusted by Production for now. Automatic job-level deduction 
 
 Database roles are:
 
-- `production`
+- `system_admin` — owner-level app settings and staff/role management, while retaining production access
+- `production` — cross-branch job production, stock and machine workflow; cannot manage staff roles
 - `branch_admin`
 - `branch_user`
 
-A branch user must never be able to promote themselves to Production or change their branch.
+The `clandon491@gmail.com` account uses `system_admin`. The `PostNet - Plettenberg Bay` account uses `production` for the printer workflow. The staff UI does not offer `system_admin` as an assignable role, and the database prevents the system administrator from accidentally demoting its own account.
 
 The UI is not the security boundary. PostgreSQL RLS and database triggers are.
 
-`public.prevent_self_privilege_escalation()` prevents authenticated non-production users from changing their own role or branch.
+`public.prevent_self_privilege_escalation()` prevents authenticated non-admin users from changing their own role or branch. Row-level security restricts staff profile management to system administrators.
 
 The relevant migration is:
 
@@ -289,16 +290,13 @@ Before merge I also check for:
 
 ## Deployment
 
-Netlify builds with `npm run build` and publishes `dist`.
+The repository's current automated deployment workflow is `.github/workflows/deploy-pages.yml`. It runs `npm run check` and `npm run build` for pull requests, and publishes `dist` to GitHub Pages only from `main`.
 
-Frontend environment variables belong in Netlify Site settings:
+The Vite base path `/postnet-production/` is configured for the GitHub Pages project URL. The workflow supplies the Supabase project URL and public publishable key needed by the browser app. GitHub repository variables named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` can override the safe public defaults in that workflow.
 
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-```
+The browser key is a public publishable key. Never put a Supabase `service_role` key or any secret key in frontend code, workflow defaults, or public repository variables. Local development still uses a `.env` file based on `.env.example`.
 
-I never commit service-role keys or other secrets to Git.
+`netlify.toml` remains in the repository for Netlify configuration, but the workflow above is the automated GitHub Pages deployment path. If switching production hosting back to Netlify, configure its environment variables and revisit the Vite base path for a root-hosted site.
 
 ## Safe release flow
 
