@@ -426,7 +426,7 @@ main { min-width: 0; }
 .report-table [hidden] { display: none; }
 .report-job-link { border: 0; padding: 0; background: transparent; color: var(--postnet-red); font-size: 11px; font-weight: 900; white-space: nowrap; }
 .report-job-link:hover { text-decoration: underline; }
-.report-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.report-stats, .reports-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 820px) {
   .report-stats, .reports-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-filters { display: grid; grid-template-columns: 1fr 1fr; }
