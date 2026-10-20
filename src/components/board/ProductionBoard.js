@@ -133,14 +133,17 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
       job.customer_name.toLowerCase().includes(query) ||
       job.branch.toLowerCase().includes(query) ||
       job.email_reference.toLowerCase().includes(query) ||
-      job.material.toLowerCase().includes(query)
+      job.material.toLowerCase().includes(query) ||
+      (Array.isArray(job.items) && job.items.some((item) => String(item.material || '').toLowerCase().includes(query)))
     );
   }
   if (filters.branch) filtered = filtered.filter((job) => job.branch === filters.branch);
   if (filters.priority) filtered = filtered.filter((job) => job.priority === filters.priority);
   if (filters.status) filtered = filtered.filter((job) => job.status === filters.status);
   if (filters.type) filtered = filtered.filter((job) => job.job_type === filters.type);
-  if (filters.material) filtered = filtered.filter((job) => job.material === filters.material);
+  if (filters.material) filtered = filtered.filter((job) =>
+    job.material === filters.material || (Array.isArray(job.items) && job.items.some((item) => item.material === filters.material))
+  );
 
   filtered = sortJobs(filtered);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
