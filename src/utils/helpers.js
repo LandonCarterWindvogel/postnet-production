@@ -44,3 +44,16 @@ export function isOverdue(job) {
   if (!job.expected_ready_by) return false;
   return new Date() > new Date(job.expected_ready_by) && !isClosed(job);
 }
+
+
+export function getJobTypeLabel(job) {
+  const itemTypes = new Set(Array.isArray(job?.items) ? job.items.map((item) => item.type) : []);
+  if (job?.job_type === 'mixed' || (itemTypes.has('stickers') && itemTypes.has('flex'))) {
+    return 'Stickers + T-shirt Flex';
+  }
+  return job?.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
+}
+
+export function getJobMaterialLabel(job) {
+  return job?.job_type === 'mixed' ? 'Multiple materials' : (job?.material || '—');
+}
