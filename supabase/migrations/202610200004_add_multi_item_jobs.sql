@@ -62,7 +62,7 @@ BEGIN
     RAISE EXCEPTION 'A job must contain at least one item';
   END IF;
 
-  FOR item IN SELECT value FROM jsonb_array_elements(NEW.items) AS value
+  FOR item IN SELECT elements.value FROM jsonb_array_elements(NEW.items) AS elements(value)
   LOOP
     IF jsonb_typeof(item) <> 'object' THEN
       RAISE EXCEPTION 'Each job item must be an object';
@@ -81,8 +81,8 @@ BEGIN
       RAISE EXCEPTION 'Each item needs numeric width, height and quantity';
     END IF;
 
-    IF (item ->> 'width_mm')::numeric <= 0
-       OR (item ->> 'height_mm')::numeric <= 0
+    IF (item ->> 'width_mm')::numeric <= 0 OR (item ->> 'width_mm')::numeric > 10000
+       OR (item ->> 'height_mm')::numeric <= 0 OR (item ->> 'height_mm')::numeric > 10000
        OR (item ->> 'quantity')::bigint <= 0 THEN
       RAISE EXCEPTION 'Item sizes and quantity must be greater than zero';
     END IF;
