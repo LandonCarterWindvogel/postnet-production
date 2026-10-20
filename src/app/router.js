@@ -7,12 +7,12 @@ import { renderJobDetails } from '../components/jobs/JobDetails.js';
 import { renderStock } from '../components/stock/StockList.js';
 import { renderSettings } from '../components/settings/StaffSettings.js';
 import { renderBranchDashboard } from '../components/dashboard/BranchDashboard.js';
-import { isProduction } from '../utils/helpers.js';
+import { isProduction, getJobTypeLabel, getJobMaterialLabel } from '../utils/helpers.js';
 import { escapeHtml, formatJobNumber } from '../utils/formatters.js';
 import { STATUS_LABELS } from '../utils/constants.js';
 
 function renderHistoryCard(job) {
-  const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
+  const typeLabel = getJobTypeLabel(job);
   const statusLabel = STATUS_LABELS[job.status] || job.status;
 
   return `<article class="job-card ${job.priority === 'urgent' ? 'priority-urgent' : ''}" data-open-job="${job.id}">
@@ -22,7 +22,7 @@ function renderHistoryCard(job) {
     </div>
     <h3>${escapeHtml(job.customer_name)}</h3>
     <p>${escapeHtml(job.branch)} · ${typeLabel}</p>
-    <p>${escapeHtml(job.material)} · ${escapeHtml(job.specification)} · ${job.quantity}</p>
+    <p>${escapeHtml(getJobMaterialLabel(job))} · ${escapeHtml(job.specification)} · ${job.quantity}</p>
   </article>`;
 }
 

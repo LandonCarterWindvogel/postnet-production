@@ -357,3 +357,37 @@ main { min-width: 0; }
   .job-form { padding: 18px; }
   .wizard-steps { margin-top: -18px; }
 }
+
+
+/* Multi-item sticker / T-shirt Flex job intake */
+.job-items { display: grid; gap: 12px; }
+.job-item-card { padding: 16px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfd; }
+.job-item-card__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.job-item-card__header > div { display: grid; gap: 3px; }
+.job-item-card__number { color: var(--navy); font-size: 13px; font-weight: 900; }
+.job-item-card__header small { color: var(--muted); font-size: 10px; font-weight: 500; }
+.job-item-card__remove { min-height: 31px; padding: 6px 10px; font-size: 10px; }
+.job-item-add-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.job-item-add-actions .button { min-height: 36px; }
+.review-card--items { min-width: 0; }
+.review-item-list { display: grid; gap: 8px; }
+.review-item { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid #e7eaee; }
+.review-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.review-item strong { color: var(--ink); font-size: 11px; }
+.review-item span, .review-item small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.detail-card--items { margin-bottom: 14px; max-width: 1050px; }
+.job-item-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.job-item-list__item { padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: #fbfcfd; }
+.job-item-list__top { display: grid; gap: 4px; margin-bottom: 10px; }
+.job-item-list__top strong { font-size: 12px; }
+.job-item-list__top span { color: var(--postnet-red); font-size: 11px; font-weight: 800; }
+.job-item-list__item dl { display: grid; gap: 6px; margin: 0; }
+.job-item-list__item dl div { display: flex; justify-content: space-between; gap: 10px; }
+.job-item-list__item dt { color: var(--muted); font-size: 10px; }
+.job-item-list__item dd { margin: 0; text-align: right; font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
+
+@media (max-width: 560px) {
+  .job-item-card { padding: 12px; }
+  .job-item-card__header { align-items: flex-start; }
+  .job-item-add-actions { display: grid; grid-template-columns: 1fr; }
+}

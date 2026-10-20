@@ -4,7 +4,7 @@ import { BOARD_STATUSES, STATUS_LABELS, MACHINE_STATUS_LABELS, BRANCHES } from '
 import { WORKFLOWS } from '../../config.js';
 import { escapeHtml, formatJobNumber } from '../../utils/formatters.js';
 import { formatDateTime } from '../../utils/dates.js';
-import { computeNextStatus, isClosed, isProduction } from '../../utils/helpers.js';
+import { computeNextStatus, isClosed, isProduction, getJobTypeLabel, getJobMaterialLabel } from '../../utils/helpers.js';
 import { renderNeedsAttention } from './NeedsAttention.js';
 import { ROLAND_MACHINE_MARK } from '../../utils/brandAssets.js';
 
@@ -88,7 +88,7 @@ function machinePill(machine, canEdit, jobs) {
 
 function renderTableRow(job) {
   const progress = progressForJob(job);
-  const typeLabel = job.job_type === 'flex' ? 'T-shirt Flex' : 'Stickers';
+  const typeLabel = getJobTypeLabel(job);
   const updated = job.updated_at ? formatDateTime(job.updated_at) : '—';
   const actionLabel = productionActionLabel(job);
 
@@ -97,7 +97,7 @@ function renderTableRow(job) {
     <td>${escapeHtml(job.branch)}</td>
     <td><strong>${escapeHtml(job.customer_name)}</strong></td>
     <td>${typeLabel}</td>
-    <td>${escapeHtml(job.material)}</td>
+    <td>${escapeHtml(getJobMaterialLabel(job))}</td>
     <td><span class="priority-badge priority-${job.priority}">${priorityLabel(job.priority)}</span></td>
     <td><span class="${operatorPhaseClass(job)}">${escapeHtml(operatorPhase(job))}</span>${isInProduction(job) && job.status !== 'queued' ? `<small class="phase-detail">${escapeHtml(STATUS_LABELS[job.status] || job.status)}</small>` : ''}</td>
     <td class="progress-cell"><div class="progress-inline"><div class="progress-track"><span style="width:${progress}%"></span></div><span>${progress}%</span></div></td>
@@ -133,14 +133,17 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
       job.customer_name.toLowerCase().includes(query) ||
       job.branch.toLowerCase().includes(query) ||
       job.email_reference.toLowerCase().includes(query) ||
-      job.material.toLowerCase().includes(query)
+      job.material.toLowerCase().includes(query) ||
+      (Array.isArray(job.items) && job.items.some((item) => String(item.material || '').toLowerCase().includes(query)))
     );
   }
   if (filters.branch) filtered = filtered.filter((job) => job.branch === filters.branch);
   if (filters.priority) filtered = filtered.filter((job) => job.priority === filters.priority);
   if (filters.status) filtered = filtered.filter((job) => job.status === filters.status);
   if (filters.type) filtered = filtered.filter((job) => job.job_type === filters.type);
-  if (filters.material) filtered = filtered.filter((job) => job.material === filters.material);
+  if (filters.material) filtered = filtered.filter((job) =>
+    job.material === filters.material || (Array.isArray(job.items) && job.items.some((item) => item.material === filters.material))
+  );
 
   filtered = sortJobs(filtered);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -171,7 +174,7 @@ export function renderProductionBoard({ jobs, profile, error, machines = [], sea
     <select id="filter-branch" aria-label="Filter by branch"><option value="" ${filters.branch === '' ? 'selected' : ''}>All Branches</option>${BRANCHES.map((branch) => `<option value="${escapeHtml(branch)}" ${filters.branch === branch ? 'selected' : ''}>${escapeHtml(branch)}</option>`).join('')}</select>
     <select id="filter-priority" aria-label="Filter by priority"><option value="" ${filters.priority === '' ? 'selected' : ''}>All Priorities</option><option value="standard" ${filters.priority === 'standard' ? 'selected' : ''}>Standard</option><option value="rush" ${filters.priority === 'rush' ? 'selected' : ''}>Rush</option><option value="urgent" ${filters.priority === 'urgent' ? 'selected' : ''}>Urgent</option></select>
     <select id="filter-status" aria-label="Filter by internal status"><option value="" ${filters.status === '' ? 'selected' : ''}>All Production States</option>${BOARD_STATUSES.map((status) => `<option value="${status}" ${filters.status === status ? 'selected' : ''}>${status === 'cutting' ? 'Cutting — T-shirt Flex' : status === 'contour_cutting' ? 'Cutting — Stickers' : STATUS_LABELS[status]}</option>`).join('')}</select>
-    <select id="filter-type" aria-label="Filter by type"><option value="" ${filters.type === '' ? 'selected' : ''}>All Types</option><option value="stickers" ${filters.type === 'stickers' ? 'selected' : ''}>Stickers</option><option value="flex" ${filters.type === 'flex' ? 'selected' : ''}>T-shirt Flex</option></select>
+    <select id="filter-type" aria-label="Filter by type"><option value="" ${filters.type === '' ? 'selected' : ''}>All Types</option><option value="stickers" ${filters.type === 'stickers' ? 'selected' : ''}>Stickers</option><option value="flex" ${filters.type === 'flex' ? 'selected' : ''}>T-shirt Flex</option><option value="mixed" ${filters.type === 'mixed' ? 'selected' : ''}>Mixed order</option></select>
     <select id="filter-material" aria-label="Filter by material"><option value="" ${filters.material === '' ? 'selected' : ''}>All Materials</option>${Array.from(new Set(active.map((j) => j.material))).sort().map((material) => `<option value="${escapeHtml(material)}" ${filters.material === material ? 'selected' : ''}>${escapeHtml(material)}</option>`).join('')}</select>
   </div>`;
 
