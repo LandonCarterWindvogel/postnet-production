@@ -106,3 +106,4 @@ export function renderNewJobForm(profile, stockItems = []) {
         <div class="wizard-actions"><button type="button" class="button button--ghost" data-wizard-back="2">Back</button><button class="button button--primary">Submit Job</button></div>
       </section>
     </form>`;
+}
