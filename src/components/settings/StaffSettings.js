@@ -1,13 +1,19 @@
 import { escapeHtml } from '../../utils/formatters.js';
 import { BRANCHES, ROLE_LABELS } from '../../utils/constants.js';
-import { isProduction } from '../../utils/helpers.js';
+import { isSystemAdmin } from '../../utils/helpers.js';
 
 function branchOptions(selected) {
   return BRANCHES.map((value) => `<option ${value === selected ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
 }
 
 function roleOptions(selected) {
-  return Object.entries(ROLE_LABELS)
+  // Keep the sole system-admin role out of the assignable list and make the
+  // current owner role read-only so it cannot be removed accidentally in the UI.
+  const roles = selected === 'system_admin'
+    ? [['system_admin', ROLE_LABELS.system_admin]]
+    : Object.entries(ROLE_LABELS).filter(([value]) => value !== 'system_admin');
+
+  return roles
     .map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`)
     .join('');
 }
@@ -21,7 +27,7 @@ function staffRow(member) {
     <form class="staff-row__form" data-staff-id="${member.id}">
       <label>Name<input name="fullName" value="${escapeHtml(member.full_name)}" required></label>
       <label>Branch<select name="branch">${branchOptions(member.branch)}</select></label>
-      <label>Role<select name="role">${roleOptions(member.role)}</select></label>
+      <label>Role<select name="role" ${member.role === 'system_admin' ? 'disabled' : ''}>${roleOptions(member.role)}</select>${member.role === 'system_admin' ? '<input type="hidden" name="role" value="system_admin">' : ''}</label>
       <button class="button">Save</button>
     </form>
   </article>`;
@@ -34,7 +40,7 @@ function ownProfileCard(member) {
       <p>${escapeHtml(member.branch)} · ${ROLE_LABELS[member.role] || member.role}</p>
     </div>
   </article>
-  <p class="notice">To change your name, branch, or role, ask someone at the production centre.</p>`;
+  <p class="notice">To change your name, branch, or role, ask the system administrator.</p>`;
 }
 
 function storeOverview() {
@@ -47,15 +53,15 @@ function storeOverview() {
 }
 
 export function renderSettings({ staff, profile, error }) {
-  const canManage = isProduction(profile);
+  const canManage = isSystemAdmin(profile);
 
   return `<section class="page-heading">
-      <div><p class="eyebrow">Administration</p><h1>Settings</h1><p>${canManage ? 'Manage operators and the stores available to the production workflow.' : 'Your account details.'}</p></div>
+      <div><p class="eyebrow">${canManage ? 'Administration' : 'Account'}</p><h1>Settings</h1><p>${canManage ? 'Manage operators and the stores available to the production workflow.' : 'Your account details.'}</p></div>
     </section>
     ${error ? `<p class="form-error form-error--banner">${escapeHtml(error)}</p>` : ''}
-    ${storeOverview()}
+    ${canManage ? storeOverview() : ''}
     <section class="settings-section">
-      <div class="settings-section__heading"><div><span class="eyebrow">Access</span><h2>Operators</h2></div><span>${canManage ? 'Production can update branch and role assignments.' : 'Your current account.'}</span></div>
+      <div class="settings-section__heading"><div><span class="eyebrow">Access</span><h2>${canManage ? 'Operators' : 'My account'}</h2></div><span>${canManage ? 'Only the system administrator can update staff assignments.' : 'Your account details.'}</span></div>
       <section class="staff-list">
         ${canManage
           ? (staff.map(staffRow).join('') || '<p class="empty">No staff found.</p>')
