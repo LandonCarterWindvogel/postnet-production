@@ -48,16 +48,50 @@ function validateStep(form, step) {
   }
 
   if (step === 2) {
-    for (const name of ['widthMm', 'heightMm']) {
-      if (!positiveNumber(form, name)) {
-        showStepError(form, step, FIELD_MESSAGES[name], name);
+    const rows = [...form.querySelectorAll('[data-item-row]')];
+    if (!rows.length) {
+      showStepError(form, step, 'Add at least one sticker or T-shirt Flex item.');
+      return false;
+    }
+
+    for (const [index, row] of rows.entries()) {
+      const name = row.querySelector('[data-item-field="name"]');
+      const width = row.querySelector('[data-item-field="width_mm"]');
+      const height = row.querySelector('[data-item-field="height_mm"]');
+      const quantity = row.querySelector('[data-item-field="quantity"]');
+      const material = row.querySelector('[data-item-field="material"]');
+      if (!name?.value.trim()) {
+        showStepError(form, step, `Enter a name for item ${index + 1}.`);
+        name?.focus();
+        return false;
+      }
+      if (!Number.isFinite(Number(width?.value)) || Number(width?.value) <= 0) {
+        showStepError(form, step, `Enter a valid width for item ${index + 1}.`);
+        width?.focus();
+        return false;
+      }
+      if (!Number.isFinite(Number(height?.value)) || Number(height?.value) <= 0) {
+        showStepError(form, step, `Enter a valid height for item ${index + 1}.`);
+        height?.focus();
+        return false;
+      }
+      if (!Number.isInteger(Number(quantity?.value)) || Number(quantity?.value) < 1) {
+        showStepError(form, step, `Enter a quantity of at least 1 for item ${index + 1}.`);
+        quantity?.focus();
+        return false;
+      }
+      if (!material?.value) {
+        showStepError(form, step, `Choose a material for item ${index + 1}.`);
+        material?.focus();
         return false;
       }
     }
+  }
 
-    const quantity = Number(form.elements.quantity?.value);
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      showStepError(form, step, FIELD_MESSAGES.quantity, 'quantity');
+  if (step === 1 && form.elements.fulfillmentMethod?.value === 'delivery') {
+    const address = form.elements.deliveryAddress;
+    if (!String(address?.value || '').trim() || String(address.value).trim().length < 5) {
+      showStepError(form, step, 'Enter a delivery address of at least 5 characters.', 'deliveryAddress');
       return false;
     }
   }
