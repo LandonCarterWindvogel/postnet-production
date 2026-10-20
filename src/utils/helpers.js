@@ -4,8 +4,14 @@
 import { WORKFLOWS } from '../config.js';
 import { CLOSED_STATUSES } from './constants.js';
 
+// A system administrator keeps the complete production workflow, but only
+// system_admin is allowed to manage staff accounts and administration settings.
 export function isProduction(profile) {
-  return profile?.role === 'production';
+  return profile?.role === 'production' || profile?.role === 'system_admin';
+}
+
+export function isSystemAdmin(profile) {
+  return profile?.role === 'system_admin';
 }
 
 export function isClosed(job) {
