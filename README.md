@@ -290,13 +290,14 @@ Before merge I also check for:
 
 ## Deployment
 
-The repository's current automated deployment workflow is `.github/workflows/deploy-pages.yml`. It runs `npm run check` and `npm run build` for pull requests, and publishes `dist` to GitHub Pages only from `main`.
+The repository is configured for both GitHub Pages and Netlify builds:
 
-The Vite base path `/postnet-production/` is configured for the GitHub Pages project URL. The workflow supplies the Supabase project URL and public publishable key needed by the browser app. GitHub repository variables named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` can override the safe public defaults in that workflow.
+- GitHub Pages uses `.github/workflows/deploy-pages.yml`. It runs `npm run check` and `npm run build` on pull requests without publishing them, and publishes `dist` from `main`.
+- Netlify uses `netlify.toml` to build and publish `dist`, including deploy previews. The Vite config detects GitHub Actions so GitHub Pages uses `/postnet-production/`, while Netlify and local development use the site root.
+
+Both deployment paths supply the Supabase project URL and public publishable key. GitHub repository variables named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` can override the public defaults for Pages; Netlify site variables can override the defaults in `netlify.toml`.
 
 The browser key is a public publishable key. Never put a Supabase `service_role` key or any secret key in frontend code, workflow defaults, or public repository variables. Local development still uses a `.env` file based on `.env.example`.
-
-`netlify.toml` remains in the repository for Netlify configuration, but the workflow above is the automated GitHub Pages deployment path. If switching production hosting back to Netlify, configure its environment variables and revisit the Vite base path for a root-hosted site.
 
 ## Safe release flow
 
