@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+# These are browser-visible settings: use the publishable key only, never service_role.
+[build.environment]
+  VITE_SUPABASE_URL = "https://kswsazdkvkrxmnjvhrrh.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_o6Lbc49INuhS8503iNX1WQ_xny2q_MM"
+
 [[headers]]
   for = "/*"
   [headers.values]
