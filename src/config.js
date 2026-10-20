@@ -10,5 +10,6 @@ export const NAV_ITEMS = [
 
 export const WORKFLOWS = {
   stickers: ['queued', 'printing', 'drying', 'contour_cutting', 'weeding', 'quality_check', 'ready'],
-  flex: ['queued', 'cutting', 'weeding', 'heat_press', 'quality_check', 'ready']
+  flex: ['queued', 'cutting', 'weeding', 'heat_press', 'quality_check', 'ready'],
+  mixed: ['queued', 'printing', 'drying', 'contour_cutting', 'cutting', 'weeding', 'heat_press', 'quality_check', 'ready']
 };
