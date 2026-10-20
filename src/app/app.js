@@ -1,6 +1,8 @@
 // Application entry point: wires together state, stores, router and the DOM.
 
 import { MATERIALS } from '../utils/constants.js';
+import { renderJobItemRow } from '../components/jobs/NewJobForm.js';
+import { escapeHtml } from '../utils/formatters.js';
 import { validateJobForm } from '../utils/validators.js';
 import { isProduction, isOverdue } from '../utils/helpers.js';
 import { setBoardPage } from '../components/board/ProductionBoard.js';
@@ -108,34 +110,104 @@ function showWizardStep(step) {
   if (Number(step) === 3) updateWizardReview();
 }
 
+function collectJobItems(form) {
+  return [...form.querySelectorAll('[data-item-row]')].map((row) => ({
+    type: row.querySelector('[data-item-field="type"]').value,
+    width_mm: Number(row.querySelector('[data-item-field="width_mm"]').value),
+    height_mm: Number(row.querySelector('[data-item-field="height_mm"]').value),
+    quantity: Number(row.querySelector('[data-item-field="quantity"]').value),
+    material: row.querySelector('[data-item-field="material"]').value
+  }));
+}
+
+function itemTypeLabel(type) {
+  return type === 'flex' ? 'T-shirt Flex' : 'Sticker';
+}
+
+function jobTypeLabelForItems(items) {
+  const types = new Set(items.map((item) => item.type));
+  if (types.has('stickers') && types.has('flex')) return 'Stickers + T-shirt Flex';
+  return types.has('flex') ? 'T-shirt Flex' : 'Stickers';
+}
+
 function updateWizardReview() {
   const form = document.getElementById('job-form');
   if (!form) return;
   const values = new FormData(form);
+  const items = collectJobItems(form);
   const labels = {
-    type: values.get('type') === 'flex' ? 'T-shirt Flex' : 'Stickers',
-    priority: values.get('priority') === 'standard' ? 'Standard' : values.get('priority')?.charAt(0).toUpperCase() + values.get('priority')?.slice(1)
+    priority: values.get('priority') === 'standard'
+      ? 'Standard'
+      : values.get('priority')?.charAt(0).toUpperCase() + values.get('priority')?.slice(1)
   };
 
-  ['branch', 'customer', 'type', 'priority', 'emailReference', 'specification', 'quantity', 'material'].forEach((key) => {
+  ['branch', 'customer', 'priority', 'emailReference'].forEach((key) => {
     const target = form.querySelector(`[data-review="${key}"]`);
-    if (!target) return;
-    target.textContent = labels[key] || values.get(key) || '—';
+    if (target) target.textContent = labels[key] || values.get(key) || '—';
   });
+
+  const typeTarget = form.querySelector('[data-review="type"]');
+  if (typeTarget) typeTarget.textContent = jobTypeLabelForItems(items);
+
+  const itemList = form.querySelector('[data-review-items]');
+  if (itemList) {
+    itemList.innerHTML = items.map((item, index) => {
+      const size = item.width_mm > 0 && item.height_mm > 0
+        ? `${item.width_mm} × ${item.height_mm} mm`
+        : 'Size not entered';
+      const quantity = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : '—';
+      return `<article class="review-item"><strong>${index + 1}. ${escapeHtml(itemTypeLabel(item.type))}</strong><span>${escapeHtml(size)} · Qty ${quantity}</span><small>${escapeHtml(item.material)}</small></article>`;
+    }).join('') || '<p>Add at least one item.</p>';
+  }
+
+  const summary = form.querySelector('[data-item-summary]');
+  if (summary) {
+    const count = items.length;
+    summary.textContent = `${count} item${count === 1 ? '' : 's'} · ${jobTypeLabelForItems(items)}`;
+  }
 }
 
-function updateMaterialUi() {
-  const form = document.getElementById('job-form');
+function syncItemRows(form) {
   if (!form) return;
-  const material = form.querySelector('#material');
-  const warning = form.querySelector('#stock-warning');
-  const selected = form.querySelector('#selected-material-label');
-  if (selected && material) selected.textContent = material.value;
-  if (warning) warning.textContent = '';
+  const rows = [...form.querySelectorAll('[data-item-row]')];
+  const counts = { stickers: 0, flex: 0 };
+
+  rows.forEach((row) => {
+    const type = row.querySelector('[data-item-field="type"]').value;
+    counts[type] = (counts[type] || 0) + 1;
+    const title = row.querySelector('[data-item-title]');
+    if (title) title.textContent = `${type === 'flex' ? 'T-shirt Flex' : 'Sticker'} ${counts[type]}`;
+    const remove = row.querySelector('[data-remove-item]');
+    if (remove) remove.disabled = rows.length <= 1;
+  });
+
+  updateWizardReview();
 }
 
 function bindEvents() {
   appEl.addEventListener('click', async (event) => {
+    const addItemButton = event.target.closest('[data-add-item]');
+    if (addItemButton) {
+      const form = addItemButton.closest('#job-form');
+      const list = form?.querySelector('[data-job-items]');
+      if (!form || !list) return;
+      const itemCount = list.querySelectorAll('[data-item-row]').length;
+      list.insertAdjacentHTML('beforeend', renderJobItemRow(addItemButton.dataset.addItem, itemCount + 1));
+      syncItemRows(form);
+      form.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    const removeItemButton = event.target.closest('[data-remove-item]');
+    if (removeItemButton) {
+      const form = removeItemButton.closest('#job-form');
+      const list = form?.querySelector('[data-job-items]');
+      if (!form || !list || list.querySelectorAll('[data-item-row]').length <= 1) return;
+      removeItemButton.closest('[data-item-row]')?.remove();
+      syncItemRows(form);
+      form.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
     const wizardNext = event.target.closest('[data-wizard-next]');
     if (wizardNext) {
       showWizardStep(Number(wizardNext.dataset.wizardNext));
@@ -218,17 +290,19 @@ function bindEvents() {
   });
 
   appEl.addEventListener('change', (event) => {
-    if (event.target.id === 'job-type') {
-      const materialSelect = document.querySelector('#material');
+    const itemTypeField = event.target.closest('[data-item-field="type"]');
+    if (itemTypeField) {
+      const row = itemTypeField.closest('[data-item-row]');
+      const materialSelect = row?.querySelector('[data-item-field="material"]');
       if (materialSelect) {
-        materialSelect.innerHTML = MATERIALS[event.target.value]
-          .map((v) => `<option>${v}</option>`)
+        materialSelect.innerHTML = MATERIALS[itemTypeField.value]
+          .map((value) => `<option>${escapeHtml(value)}</option>`)
           .join('');
       }
-      updateMaterialUi();
+      const form = itemTypeField.closest('#job-form');
+      syncItemRows(form);
+      if (form) form.dispatchEvent(new Event('input', { bubbles: true }));
     }
-
-    if (event.target.id === 'material') updateMaterialUi();
 
     const searchInput = document.getElementById('search-input');
     const filterBranch = document.getElementById('filter-branch');
@@ -344,13 +418,19 @@ function bindEvents() {
     }
 
     if (event.target.id === 'job-form') {
-      const form = new FormData(event.target);
-      const messageEl = event.target.querySelector('.form-error');
+      const jobForm = event.target;
+      const form = new FormData(jobForm);
+      const messageEl = jobForm.querySelector('[data-wizard-error="3"]');
+      const items = collectJobItems(jobForm);
+      const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+      const firstItem = items[0];
       const values = {
         customer: form.get('customer'),
         emailReference: form.get('emailReference'),
-        specification: form.get('specification'),
-        quantity: form.get('quantity'),
+        specification: firstItem && firstItem.width_mm > 0 && firstItem.height_mm > 0
+          ? `${firstItem.width_mm} × ${firstItem.height_mm} mm`
+          : '',
+        quantity: Number.isInteger(totalQuantity) ? totalQuantity : '',
         artworkReceived: form.get('artworkReceived') === 'on',
         artworkPrintReady: form.get('artworkPrintReady') === 'on',
         artworkApproved: form.get('artworkApproved') === 'on',
@@ -358,6 +438,20 @@ function bindEvents() {
       };
 
       const errors = validateJobForm(values);
+      if (!items.length) errors.push('Add at least one sticker or T-shirt Flex item.');
+      items.forEach((item, index) => {
+        const itemLabel = `Item ${index + 1}`;
+        if (!Number.isFinite(item.width_mm) || item.width_mm <= 0 || !Number.isFinite(item.height_mm) || item.height_mm <= 0) {
+          errors.push(`${itemLabel}: enter a valid width and height.`);
+        }
+        if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+          errors.push(`${itemLabel}: quantity must be a whole number of at least 1.`);
+        }
+        if (!MATERIALS[item.type]?.includes(item.material)) {
+          errors.push(`${itemLabel}: choose a valid material for the selected item type.`);
+        }
+      });
+
       if (!values.artworkReceived) errors.push('Please confirm artwork was received by email.');
       if (!values.artworkPrintReady) errors.push('Please confirm artwork is print-ready and correctly sized.');
       if (!values.artworkApproved) errors.push('Please confirm customer approved artwork.');
@@ -366,15 +460,19 @@ function bindEvents() {
         return;
       }
 
+      const types = new Set(items.map((item) => item.type));
+      const jobType = types.size > 1 ? 'mixed' : items[0].type;
+
       try {
         const job = await createJob({
           branch: form.get('branch'),
           customer_name: form.get('customer'),
           email_reference: form.get('emailReference'),
-          job_type: form.get('type'),
-          material: form.get('material'),
-          specification: form.get('specification'),
-          quantity: Number(form.get('quantity')),
+          job_type: jobType,
+          material: firstItem.material,
+          specification: values.specification,
+          quantity: totalQuantity,
+          items,
           priority: form.get('priority'),
           cutlines_included: values.cutlinesIncluded,
           artwork_checklist_complete: true,
