@@ -306,8 +306,8 @@ function bindEvents() {
       const rows = [...table.querySelectorAll('tbody [data-report-row]:not([hidden])')]
         .map((row) => [...row.cells].map((cell) => cell.textContent.trim()));
       const quote = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-      const csv = [header, ...rows].map((row) => row.map(quote).join(',')).join('\\r\\n');
-      const blob = new Blob(['\\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
+      const csv = [header, ...rows].map((row) => row.map(quote).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
