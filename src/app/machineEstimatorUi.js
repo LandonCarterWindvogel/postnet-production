@@ -1,39 +1,45 @@
 import { estimateMachineMinutes, formatMachineTime } from '../utils/machineTime.js';
 
-function readEstimate(form) {
-  const type = form.querySelector('[name="type"]')?.value || 'stickers';
-  const width = Number(form.querySelector('[name="widthMm"]')?.value);
-  const height = Number(form.querySelector('[name="heightMm"]')?.value);
-  const quantity = Number(form.querySelector('[name="quantity"]')?.value);
-  const minutes = estimateMachineMinutes({ type, width, height, quantity });
+function readItems(form) {
+  return [...form.querySelectorAll('[data-item-row]')].map((row) => ({
+    type: row.querySelector('[data-item-field="type"]')?.value || 'stickers',
+    width: Number(row.querySelector('[data-item-field="width_mm"]')?.value),
+    height: Number(row.querySelector('[data-item-field="height_mm"]')?.value),
+    quantity: Number(row.querySelector('[data-item-field="quantity"]')?.value)
+  }));
+}
 
-  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-    const specification = form.querySelector('[name="specification"]');
-    if (specification) specification.value = `${width} × ${height} mm`;
+function estimateAllItems(form) {
+  const items = readItems(form);
+  if (!items.length) return null;
 
-    const reviewSpecification = form.querySelector('[data-review="specification"]');
-    if (reviewSpecification) reviewSpecification.textContent = `${width} × ${height} mm`;
-  }
-
-  return minutes;
+  const estimates = items.map((item) => estimateMachineMinutes(item));
+  // Avoid showing a partial estimate while any item is still incomplete.
+  if (estimates.some((minutes) => !Number.isFinite(minutes))) return null;
+  return estimates.reduce((total, minutes) => total + minutes, 0);
 }
 
 function renderEstimate(form) {
   if (!form) return;
   const output = form.querySelector('[data-machine-estimate]');
   const reviewOutput = form.querySelector('[data-review-machine-estimate]');
-  const minutes = readEstimate(form);
+  const items = readItems(form);
+  const minutes = estimateAllItems(form);
+  const itemCount = items.length;
+  const description = itemCount > 1
+    ? `Combined estimate for ${itemCount} items · print + cut only; excludes queue, drying, weeding, pressing and QC.`
+    : 'Print + cut only · excludes queue, drying, weeding, pressing and QC.';
 
   if (output) {
-    output.innerHTML = minutes
-      ? `<span>Estimated machine time</span><strong>≈ ${formatMachineTime(minutes)}</strong><small>Print + cut only · excludes queue, drying, weeding, pressing and QC.</small>`
-      : `<span>Estimated machine time</span><strong>Enter size and quantity</strong><small>Estimate appears automatically.</small>`;
+    output.innerHTML = minutes !== null
+      ? `<span>Estimated machine time</span><strong>≈ ${formatMachineTime(minutes)}</strong><small>${description}</small>`
+      : `<span>Estimated machine time</span><strong>Enter size and quantity for each item</strong><small>Estimate appears once every item has valid dimensions and quantity.</small>`;
   }
 
   if (reviewOutput) {
-    reviewOutput.innerHTML = minutes
-      ? `<span>Estimated machine time</span><strong>≈ ${formatMachineTime(minutes)}</strong><small>Print + cut only.</small>`
-      : `<span>Estimated machine time</span><strong>—</strong><small>Enter valid size and quantity.</small>`;
+    reviewOutput.innerHTML = minutes !== null
+      ? `<span>Estimated machine time</span><strong>≈ ${formatMachineTime(minutes)}</strong><small>Combined estimate for all ${itemCount} item${itemCount === 1 ? '' : 's'} · print + cut only.</small>`
+      : `<span>Estimated machine time</span><strong>—</strong><small>Enter valid size and quantity for every item.</small>`;
   }
 }
 
