@@ -66,6 +66,7 @@ export const NAV_ICONS = {
   board: '▦',
   'new-job': '+',
   'my-jobs': '◷',
+  reports: '▤',
   stock: '◫',
   settings: '⚙',
   dashboard: '⌂'
